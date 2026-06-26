@@ -1,7 +1,7 @@
 import { createSession } from "../../_shared/auth";
 import { hashPassword, randomId } from "../../_shared/crypto";
 import { errorResponse, isEmail, jsonResponse, readJson } from "../../_shared/http";
-import type { PagesContext } from "../../_shared/types";
+import { getDb, type PagesContext } from "../../_shared/types";
 
 type SignupBody = {
   name?: string;
@@ -14,6 +14,11 @@ type ExistingUser = {
 };
 
 export async function onRequestPost({ request, env }: PagesContext) {
+  const db = getDb(env);
+  if (!db) {
+    return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
+  }
+
   const body = await readJson<SignupBody>(request);
   const name = body?.name?.trim() ?? "";
   const email = body?.email?.trim().toLowerCase() ?? "";
@@ -29,7 +34,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
     return errorResponse("비밀번호는 8자 이상이어야 해요.");
   }
 
-  const existingUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
+  const existingUser = await db.prepare("SELECT id FROM users WHERE email = ?")
     .bind(email)
     .first<ExistingUser>();
 
@@ -41,7 +46,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
   const { hash, salt } = await hashPassword(password);
   const createdAt = new Date().toISOString();
 
-  await env.DB.prepare(
+  await db.prepare(
     "INSERT INTO users (id, name, email, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   )
     .bind(userId, name, email, hash, salt, createdAt)

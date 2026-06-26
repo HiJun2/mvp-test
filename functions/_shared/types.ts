@@ -1,8 +1,13 @@
 export type Env = {
-  DB: D1Database;
+  DB?: D1Database;
+  db?: D1Database;
   RECORDINGS: R2Bucket;
   SESSION_SECRET: string;
 };
+
+export function getDb(env: Env) {
+  return env.DB ?? env.db;
+}
 
 export type User = {
   id: string;

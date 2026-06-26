@@ -1,21 +1,22 @@
 import { jsonResponse } from "../_shared/http";
-import type { PagesContext } from "../_shared/types";
+import { getDb, type PagesContext } from "../_shared/types";
 
 type TableRow = {
   name: string;
 };
 
 export async function onRequestGet({ env }: PagesContext) {
+  const db = getDb(env);
   const checks = {
-    dbBinding: Boolean(env.DB),
+    dbBinding: Boolean(db),
     recordingsBinding: Boolean(env.RECORDINGS),
     sessionSecret: Boolean(env.SESSION_SECRET),
     tables: [] as string[],
   };
 
-  if (env.DB) {
+  if (db) {
     try {
-      const { results } = await env.DB.prepare(
+      const { results } = await db.prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
       ).all<TableRow>();
       checks.tables = results.map((row) => row.name);

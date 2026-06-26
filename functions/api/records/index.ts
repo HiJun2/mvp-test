@@ -1,15 +1,19 @@
 import { getCurrentUser } from "../../_shared/auth";
 import { randomId } from "../../_shared/crypto";
 import { errorResponse, jsonResponse } from "../../_shared/http";
-import type { PagesContext, RecordRow } from "../../_shared/types";
+import { getDb, type PagesContext, type RecordRow } from "../../_shared/types";
 
 export async function onRequestGet({ request, env }: PagesContext) {
   const user = await getCurrentUser(request, env);
   if (!user) {
     return errorResponse("로그인이 필요해요.", 401);
   }
+  const db = getDb(env);
+  if (!db) {
+    return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
+  }
 
-  const { results } = await env.DB.prepare(
+  const { results } = await db.prepare(
     "SELECT id, user_id, type, question, category, question_type, question_type_title, duration_seconds, r2_key, mime_type, created_at FROM records WHERE user_id = ? ORDER BY created_at DESC",
   )
     .bind(user.id)
@@ -24,6 +28,10 @@ export async function onRequestPost({ request, env }: PagesContext) {
   const user = await getCurrentUser(request, env);
   if (!user) {
     return errorResponse("로그인이 필요해요.", 401);
+  }
+  const db = getDb(env);
+  if (!db) {
+    return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
   }
 
   const form = await request.formData();
@@ -67,7 +75,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
     },
   });
 
-  await env.DB.prepare(
+  await db.prepare(
     `INSERT INTO records (
       id, user_id, type, question, category, question_type, question_type_title,
       duration_seconds, r2_key, mime_type, created_at

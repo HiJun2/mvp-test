@@ -1,6 +1,6 @@
 import { createCookie, getCookie } from "./http";
 import { randomId, sign, verifySignature } from "./crypto";
-import type { Env, User } from "./types";
+import { getDb, type Env, type User } from "./types";
 
 export const SESSION_COOKIE = "breath_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -12,12 +12,17 @@ type SessionRow = {
 };
 
 export async function createSession(env: Env, userId: string) {
+  const db = getDb(env);
+  if (!db) {
+    throw new Error("D1 binding is missing.");
+  }
+
   const sessionId = randomId("sess_");
   const expiresAt = new Date(
     Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
   ).toISOString();
 
-  await env.DB.prepare(
+  await db.prepare(
     "INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
   )
     .bind(sessionId, userId, expiresAt, new Date().toISOString())
@@ -37,6 +42,11 @@ export function clearSessionCookie() {
 }
 
 export async function getCurrentUser(request: Request, env: Env) {
+  const db = getDb(env);
+  if (!db) {
+    return null;
+  }
+
   const cookieValue = getCookie(request, SESSION_COOKIE);
   const [sessionId, signature] = cookieValue.split(".");
 
@@ -53,7 +63,7 @@ export async function getCurrentUser(request: Request, env: Env) {
     return null;
   }
 
-  const session = await env.DB.prepare(
+  const session = await db.prepare(
     "SELECT id, user_id, expires_at FROM sessions WHERE id = ?",
   )
     .bind(sessionId)
@@ -63,7 +73,7 @@ export async function getCurrentUser(request: Request, env: Env) {
     return null;
   }
 
-  return env.DB.prepare(
+  return db.prepare(
     "SELECT id, name, email, created_at FROM users WHERE id = ?",
   )
     .bind(session.user_id)
@@ -71,10 +81,15 @@ export async function getCurrentUser(request: Request, env: Env) {
 }
 
 export async function deleteCurrentSession(request: Request, env: Env) {
+  const db = getDb(env);
+  if (!db) {
+    return;
+  }
+
   const cookieValue = getCookie(request, SESSION_COOKIE);
   const [sessionId] = cookieValue.split(".");
 
   if (sessionId) {
-    await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sessionId).run();
+    await db.prepare("DELETE FROM sessions WHERE id = ?").bind(sessionId).run();
   }
 }
