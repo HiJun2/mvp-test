@@ -1,4 +1,6 @@
 const encoder = new TextEncoder();
+const CURRENT_PASSWORD_ITERATIONS = 30000;
+const LEGACY_PASSWORD_ITERATIONS = 120000;
 
 export function randomId(prefix = "") {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -24,7 +26,11 @@ export function fromBase64Url(value: string) {
   return bytes;
 }
 
-export async function hashPassword(password: string, salt = randomId()) {
+export async function hashPassword(
+  password: string,
+  salt = randomId(),
+  iterations = CURRENT_PASSWORD_ITERATIONS,
+) {
   const saltBytes = encoder.encode(salt);
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -38,7 +44,7 @@ export async function hashPassword(password: string, salt = randomId()) {
       name: "PBKDF2",
       hash: "SHA-256",
       salt: saltBytes,
-      iterations: 120000,
+      iterations,
     },
     keyMaterial,
     256,
@@ -55,7 +61,16 @@ export async function verifyPassword(
   expectedHash: string,
 ) {
   const { hash } = await hashPassword(password, salt);
-  return timingSafeEqual(hash, expectedHash);
+  if (timingSafeEqual(hash, expectedHash)) {
+    return true;
+  }
+
+  const { hash: legacyHash } = await hashPassword(
+    password,
+    salt,
+    LEGACY_PASSWORD_ITERATIONS,
+  );
+  return timingSafeEqual(legacyHash, expectedHash);
 }
 
 export async function sign(value: string, secret: string) {

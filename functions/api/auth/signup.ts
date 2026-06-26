@@ -34,40 +34,56 @@ export async function onRequestPost({ request, env }: PagesContext) {
     return errorResponse("비밀번호는 8자 이상이어야 해요.");
   }
 
-  const existingUser = await db.prepare("SELECT id FROM users WHERE email = ?")
-    .bind(email)
-    .first<ExistingUser>();
+  let stage = "checking-existing-user";
 
-  if (existingUser) {
-    return errorResponse("이미 가입된 이메일이에요.", 409);
+  try {
+    const existingUser = await db.prepare("SELECT id FROM users WHERE email = ?")
+      .bind(email)
+      .first<ExistingUser>();
+
+    if (existingUser) {
+      return errorResponse("이미 가입된 이메일이에요.", 409);
+    }
+
+    stage = "hashing-password";
+    const userId = randomId("user_");
+    const { hash, salt } = await hashPassword(password);
+    const createdAt = new Date().toISOString();
+
+    stage = "creating-user";
+    await db.prepare(
+      "INSERT INTO users (id, name, email, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+      .bind(userId, name, email, hash, salt, createdAt)
+      .run();
+
+    stage = "creating-session";
+    const sessionCookie = await createSession(env, userId);
+
+    return jsonResponse(
+      {
+        user: {
+          id: userId,
+          name,
+          email,
+          createdAt,
+        },
+      },
+      {
+        status: 201,
+        headers: {
+          "set-cookie": sessionCookie,
+        },
+      },
+    );
+  } catch (error) {
+    console.error("Signup failed", { stage, error });
+    return jsonResponse(
+      {
+        error: "회원가입 요청을 처리하지 못했어요.",
+        stage,
+      },
+      { status: 500 },
+    );
   }
-
-  const userId = randomId("user_");
-  const { hash, salt } = await hashPassword(password);
-  const createdAt = new Date().toISOString();
-
-  await db.prepare(
-    "INSERT INTO users (id, name, email, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-  )
-    .bind(userId, name, email, hash, salt, createdAt)
-    .run();
-
-  const sessionCookie = await createSession(env, userId);
-
-  return jsonResponse(
-    {
-      user: {
-        id: userId,
-        name,
-        email,
-        createdAt,
-      },
-    },
-    {
-      status: 201,
-      headers: {
-        "set-cookie": sessionCookie,
-      },
-    },
-  );
 }
