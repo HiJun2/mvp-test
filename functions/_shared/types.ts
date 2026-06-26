@@ -3,6 +3,7 @@ export type Env = {
   db?: D1Database;
   RECORDINGS: R2Bucket;
   SESSION_SECRET: string;
+  ADMIN_PASSWORD?: string;
 };
 
 export function getDb(env: Env) {

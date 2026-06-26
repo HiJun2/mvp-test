@@ -39,6 +39,7 @@ type RecordType = "daily" | "breath";
 type FontSize = "normal" | "large" | "xlarge";
 
 type BreathQuestion = {
+  id?: string;
   typeId: string;
   typeTitle: string;
   category: string;
@@ -297,6 +298,8 @@ export default function HomePage() {
   const [registerMode, setRegisterMode] = useState<"signup" | "login">("signup");
   const [selectedBreathQuestion, setSelectedBreathQuestion] =
     useState<BreathQuestion | null>(null);
+  const [breathQuestions, setBreathQuestions] =
+    useState<BreathQuestion[]>(BREATH_QUESTIONS);
   const [questionChanged, setQuestionChanged] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(5);
   const [selectedDate, setSelectedDate] = useState("2026-06-23");
@@ -362,6 +365,44 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    async function loadQuestions() {
+      try {
+        const response = await apiJson<{ questions: BreathQuestion[] }>(
+          "/api/questions",
+        );
+        if (active && response.questions.length > 0) {
+          setBreathQuestions(response.questions);
+          setSelectedBreathQuestion((currentQuestion) => {
+            if (
+              currentQuestion &&
+              response.questions.some(
+                (question) =>
+                  question.id === currentQuestion.id ||
+                  (question.typeId === currentQuestion.typeId &&
+                    question.category === currentQuestion.category &&
+                    question.question === currentQuestion.question),
+              )
+            ) {
+              return currentQuestion;
+            }
+            return null;
+          });
+        }
+      } catch {
+        // 기본 질문지를 그대로 사용한다.
+      }
+    }
+
+    loadQuestions();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (screen !== "welcome") {
       return;
     }
@@ -385,7 +426,7 @@ export default function HomePage() {
       chooseBreathQuestion(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen]);
+  }, [screen, breathQuestions]);
 
   async function handleNameSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -524,6 +565,11 @@ export default function HomePage() {
   }
 
   function chooseBreathQuestion(keepCategory: boolean) {
+    if (breathQuestions.length === 0) {
+      setSelectedBreathQuestion(null);
+      return;
+    }
+
     const completedCategories = new Set(
       records
         .filter((record) => record.type === "breath" && record.category)
@@ -540,7 +586,7 @@ export default function HomePage() {
     if (!keepCategory || !category) {
       const openCategories = Array.from(
         new Set(
-          BREATH_QUESTIONS.map((question) => question.category).filter(
+          breathQuestions.map((question) => question.category).filter(
             (questionCategory) => !completedCategories.has(questionCategory),
           ),
         ),
@@ -548,11 +594,11 @@ export default function HomePage() {
       category = getRandomItem(
         openCategories.length > 0
           ? openCategories
-          : Array.from(new Set(BREATH_QUESTIONS.map((question) => question.category))),
+          : Array.from(new Set(breathQuestions.map((question) => question.category))),
       );
     }
 
-    const availableQuestions = BREATH_QUESTIONS.filter(
+    const availableQuestions = breathQuestions.filter(
       (question) =>
         question.category === category &&
         !recordedQuestionKeys.has(`${question.typeId}:${question.category}`) &&
@@ -560,19 +606,22 @@ export default function HomePage() {
           !selectedBreathQuestion ||
           question.typeId !== selectedBreathQuestion.typeId),
     );
-    const fallbackQuestions = BREATH_QUESTIONS.filter(
+    const fallbackQuestions = breathQuestions.filter(
       (question) =>
         question.category === category &&
         (!keepCategory ||
           !selectedBreathQuestion ||
           question.typeId !== selectedBreathQuestion.typeId),
     );
+    const selectableQuestions =
+      availableQuestions.length > 0 ? availableQuestions : fallbackQuestions;
 
-    setSelectedBreathQuestion(
-      getRandomItem(
-        availableQuestions.length > 0 ? availableQuestions : fallbackQuestions,
-      ),
-    );
+    if (selectableQuestions.length === 0) {
+      setSelectedBreathQuestion(null);
+      return;
+    }
+
+    setSelectedBreathQuestion(getRandomItem(selectableQuestions));
     setQuestionChanged(keepCategory);
   }
 

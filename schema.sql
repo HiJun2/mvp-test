@@ -35,3 +35,27 @@ CREATE TABLE IF NOT EXISTS records (
 
 CREATE INDEX IF NOT EXISTS idx_records_user_created_at
 ON records(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS question_types (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS questions (
+  id TEXT PRIMARY KEY,
+  type_id TEXT NOT NULL,
+  category TEXT NOT NULL,
+  question TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  FOREIGN KEY (type_id) REFERENCES question_types(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_questions_type_order
+ON questions(type_id, sort_order);

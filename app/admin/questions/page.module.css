@@ -1,0 +1,229 @@
+.adminPage {
+  min-height: 100vh;
+  background: #f6f2ec;
+  color: #2c2520;
+  padding: 28px;
+}
+
+.header {
+  max-width: 1120px;
+  margin: 0 auto 24px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5b4034;
+  font-weight: 800;
+  text-decoration: none;
+  margin-bottom: 28px;
+}
+
+.header span {
+  color: #8a7669;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.header h1 {
+  font-size: 34px;
+  margin: 8px 0 10px;
+}
+
+.header p {
+  color: #6f6258;
+  line-height: 1.65;
+  margin: 0;
+  max-width: 680px;
+}
+
+.authRow,
+.toolbar,
+.groupList {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.authRow,
+.toolbar {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  background: #fffaf4;
+  border: 1px solid #e5d9cf;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.authRow label {
+  flex: 1;
+}
+
+.adminPage label {
+  color: #6b5c52;
+  display: grid;
+  font-size: 13px;
+  font-weight: 800;
+  gap: 7px;
+}
+
+.adminPage input,
+.adminPage textarea {
+  border: 1px solid #d4c4b7;
+  border-radius: 8px;
+  background: #fffdf9;
+  color: #2c2520;
+  font: inherit;
+  padding: 12px;
+  width: 100%;
+}
+
+.adminPage textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.adminPage button {
+  align-items: center;
+  background: #fffdf9;
+  border: 1px solid #cdb8aa;
+  border-radius: 8px;
+  color: #4f3b31;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 900;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.adminPage button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.toolbar div {
+  display: grid;
+  gap: 3px;
+  margin-right: auto;
+}
+
+.toolbar span {
+  color: #7c6b60;
+  font-size: 13px;
+}
+
+.saveButton {
+  background: #9e6b55 !important;
+  border-color: #9e6b55 !important;
+  color: #fff !important;
+}
+
+.status,
+.empty {
+  max-width: 1120px;
+  margin: 0 auto 14px;
+  background: #efe7dc;
+  border-radius: 8px;
+  color: #5a4a40;
+  font-weight: 800;
+  padding: 13px 15px;
+}
+
+.groupList {
+  display: grid;
+  gap: 16px;
+}
+
+.groupPanel {
+  background: #fffaf4;
+  border: 1px solid #e5d9cf;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.groupHeader {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 14px;
+}
+
+.questionList {
+  display: grid;
+  gap: 10px;
+}
+
+.questionRow {
+  align-items: end;
+  border-top: 1px solid #eaded5;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(260px, 1fr) auto auto;
+  padding-top: 12px;
+}
+
+.activeToggle,
+.inactiveToggle,
+.dangerButton {
+  min-width: 92px;
+}
+
+.activeToggle {
+  background: #eef7ed !important;
+  border-color: #c6dfc2 !important;
+  color: #315f36 !important;
+}
+
+.inactiveToggle {
+  background: #f3eee9 !important;
+  border-color: #d8cbc0 !important;
+  color: #6d5a50 !important;
+}
+
+.dangerButton {
+  background: #fff2ef !important;
+  border-color: #e9bbb0 !important;
+  color: #8f3324 !important;
+}
+
+.addQuestionButton {
+  margin-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .adminPage {
+    padding: 18px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+  }
+
+  .authRow,
+  .toolbar,
+  .groupHeader,
+  .questionRow {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .authRow,
+  .toolbar {
+    display: grid;
+  }
+
+  .toolbar div {
+    margin-right: 0;
+  }
+}
