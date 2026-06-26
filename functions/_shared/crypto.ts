@@ -1,6 +1,5 @@
 const encoder = new TextEncoder();
-const CURRENT_PASSWORD_ITERATIONS = 30000;
-const LEGACY_PASSWORD_ITERATIONS = 120000;
+const PASSWORD_HASH_PREFIX = "sha256:";
 
 export function randomId(prefix = "") {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -29,29 +28,14 @@ export function fromBase64Url(value: string) {
 export async function hashPassword(
   password: string,
   salt = randomId(),
-  iterations = CURRENT_PASSWORD_ITERATIONS,
 ) {
-  const saltBytes = encoder.encode(salt);
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: saltBytes,
-      iterations,
-    },
-    keyMaterial,
-    256,
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(`${salt}:${password}`),
   );
   return {
     salt,
-    hash: base64Url(new Uint8Array(bits)),
+    hash: `${PASSWORD_HASH_PREFIX}${base64Url(new Uint8Array(digest))}`,
   };
 }
 
@@ -65,12 +49,11 @@ export async function verifyPassword(
     return true;
   }
 
-  const { hash: legacyHash } = await hashPassword(
-    password,
-    salt,
-    LEGACY_PASSWORD_ITERATIONS,
-  );
-  return timingSafeEqual(legacyHash, expectedHash);
+  if (!expectedHash.startsWith(PASSWORD_HASH_PREFIX)) {
+    return timingSafeEqual(hash.slice(PASSWORD_HASH_PREFIX.length), expectedHash);
+  }
+
+  return false;
 }
 
 export async function sign(value: string, secret: string) {
