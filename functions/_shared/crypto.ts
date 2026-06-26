@@ -1,5 +1,5 @@
 const encoder = new TextEncoder();
-const PASSWORD_HASH_PREFIX = "sha256:";
+const PASSWORD_HASH_PREFIX = "hmac-sha256:";
 
 export function randomId(prefix = "") {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -29,13 +29,9 @@ export async function hashPassword(
   password: string,
   salt = randomId(),
 ) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    encoder.encode(`${salt}:${password}`),
-  );
   return {
     salt,
-    hash: `${PASSWORD_HASH_PREFIX}${base64Url(new Uint8Array(digest))}`,
+    hash: `${PASSWORD_HASH_PREFIX}${await sign(salt, password)}`,
   };
 }
 

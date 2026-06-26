@@ -77,7 +77,6 @@ export async function onRequestPost({ request, env }: PagesContext) {
       },
     );
   } catch (error) {
-    console.error("Signup failed", { stage, error });
     return jsonResponse(
       {
         error: "회원가입 요청을 처리하지 못했어요.",
