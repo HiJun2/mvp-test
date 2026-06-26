@@ -469,8 +469,21 @@ export default function HomePage() {
       method: "POST",
       body: form,
     });
-    setRecords((currentRecords) => [response.record, ...currentRecords]);
-    return response.record;
+    const savedRecord = response.record;
+    putRecordAtTop(savedRecord);
+    focusRecordDate(savedRecord);
+
+    void apiJson<{ records: VoiceRecord[] }>("/api/records")
+      .then((recordsResponse) => {
+        setRecords(recordsResponse.records);
+        const refreshedRecord =
+          recordsResponse.records.find((recordItem) => recordItem.id === savedRecord.id) ??
+          savedRecord;
+        focusRecordDate(refreshedRecord);
+      })
+      .catch(() => null);
+
+    return savedRecord;
   }
 
   async function deleteRecord(recordId: string) {
@@ -491,6 +504,23 @@ export default function HomePage() {
   function openSettings() {
     setDrawerOpen(false);
     setScreen("settings");
+  }
+
+  function focusRecordDate(record: VoiceRecord) {
+    const recordDate = new Date(record.createdAt);
+    if (recordDate.getFullYear() !== 2026) {
+      return;
+    }
+
+    setSelectedMonth(recordDate.getMonth());
+    setSelectedDate(getDateKey(record.createdAt));
+  }
+
+  function putRecordAtTop(record: VoiceRecord) {
+    setRecords((currentRecords) => [
+      record,
+      ...currentRecords.filter((currentRecord) => currentRecord.id !== record.id),
+    ]);
   }
 
   function chooseBreathQuestion(keepCategory: boolean) {
