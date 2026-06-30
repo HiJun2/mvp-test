@@ -401,6 +401,103 @@
   box-shadow: 0 1px 4px rgba(35, 33, 31, 0.08);
 }
 
+.progressPanel {
+  margin-top: 16px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.progressHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.progressHeader h2 {
+  margin: 4px 0 0;
+  font-size: 1.18em;
+  letter-spacing: 0;
+}
+
+.progressHeader strong {
+  min-width: 56px;
+  min-height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e4ede7;
+  color: var(--sage);
+  font-size: 0.9em;
+}
+
+.progressGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.progressCard {
+  min-width: 0;
+  border: 1px solid #eaded5;
+  border-radius: 8px;
+  background: #fbf7f0;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.progressRing {
+  width: 62px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--sage) var(--progress),
+    #e7ddd2 var(--progress)
+  );
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.progressRing::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--surface-strong);
+}
+
+.progressRing span {
+  color: var(--ink);
+  font-size: 0.78em;
+  font-weight: 900;
+  position: relative;
+  z-index: 1;
+}
+
+.progressCard div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.progressCard strong {
+  overflow-wrap: anywhere;
+}
+
+.progressCard div:last-child span {
+  color: var(--muted);
+  font-size: 0.84em;
+  font-weight: 800;
+}
+
 .calendarPanel {
   margin-top: 16px;
 }

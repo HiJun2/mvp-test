@@ -20,7 +20,14 @@ import {
   Warehouse,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import styles from "./page.module.css";
 
 type Screen =
@@ -44,6 +51,13 @@ type BreathQuestion = {
   typeTitle: string;
   category: string;
   question: string;
+};
+
+type CategoryProgress = {
+  category: string;
+  completed: number;
+  total: number;
+  percent: number;
 };
 
 type User = {
@@ -260,6 +274,63 @@ function getDateKey(iso: string) {
   return `${year}-${month}-${day}`;
 }
 
+function getCategoryProgress(
+  questions: BreathQuestion[],
+  records: VoiceRecord[],
+): CategoryProgress[] {
+  const categorySlots = new Map<
+    string,
+    {
+      category: string;
+      order: number;
+      slots: Set<string>;
+    }
+  >();
+
+  questions.forEach((question, index) => {
+    const slotKey = `${question.typeId}:${question.category}`;
+    const categoryProgress = categorySlots.get(question.category) ?? {
+      category: question.category,
+      order: index,
+      slots: new Set<string>(),
+    };
+
+    categoryProgress.slots.add(slotKey);
+    categoryProgress.order = Math.min(categoryProgress.order, index);
+    categorySlots.set(question.category, categoryProgress);
+  });
+
+  const completedSlots = new Set(
+    records
+      .filter(
+        (record) =>
+          record.type === "breath" && record.category && record.questionType,
+      )
+      .map((record) => `${record.questionType}:${record.category}`),
+  );
+
+  const progressItems = Array.from(categorySlots.values())
+    .map((item) => {
+      const slots = Array.from(item.slots);
+      const completed = slots.filter((slot) => completedSlots.has(slot)).length;
+      return {
+        category: item.category,
+        completed,
+        total: slots.length,
+        percent: slots.length > 0 ? Math.round((completed / slots.length) * 100) : 0,
+        order: item.order,
+      };
+    })
+    .sort((left, right) => left.order - right.order);
+
+  return progressItems.map((item) => ({
+    category: item.category,
+    completed: item.completed,
+    total: item.total,
+    percent: item.percent,
+  }));
+}
+
 async function apiJson<T>(path: string, init: RequestInit = {}) {
   const response = await fetch(path, {
     credentials: "include",
@@ -315,6 +386,10 @@ export default function HomePage() {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       ),
     [records],
+  );
+  const categoryProgress = useMemo(
+    () => getCategoryProgress(breathQuestions, records),
+    [breathQuestions, records],
   );
 
   useEffect(() => {
@@ -730,6 +805,7 @@ export default function HomePage() {
       {screen === "warehouse" && (
         <WarehouseScreen
           records={sortedRecords}
+          categoryProgress={categoryProgress}
           selectedDate={selectedDate}
           selectedMonth={selectedMonth}
           playingRecordId={playingRecordId}
@@ -1197,6 +1273,7 @@ function RecordingScreen({
 
 function WarehouseScreen({
   records,
+  categoryProgress,
   selectedDate,
   selectedMonth,
   playingRecordId,
@@ -1206,6 +1283,7 @@ function WarehouseScreen({
   onDelete,
 }: {
   records: VoiceRecord[];
+  categoryProgress: CategoryProgress[];
   selectedDate: string;
   selectedMonth: number;
   playingRecordId: string | null;
@@ -1246,6 +1324,8 @@ function WarehouseScreen({
         </div>
       </div>
 
+      <CategoryProgressPanel progressItems={categoryProgress} />
+
       {viewMode === "calendar" ? (
         <>
           <Calendar2026
@@ -1274,6 +1354,52 @@ function WarehouseScreen({
           onDelete={onDelete}
         />
       )}
+    </section>
+  );
+}
+
+function CategoryProgressPanel({
+  progressItems,
+}: {
+  progressItems: CategoryProgress[];
+}) {
+  return (
+    <section className={styles.progressPanel} aria-label="카테고리별 숨결 완성률">
+      <div className={styles.progressHeader}>
+        <div>
+          <span className={styles.kicker}>카테고리 완성률</span>
+          <h2>숨결 기록 진행</h2>
+        </div>
+        <strong>
+          {progressItems.reduce((total, item) => total + item.completed, 0)}/
+          {progressItems.reduce((total, item) => total + item.total, 0)}
+        </strong>
+      </div>
+      <div className={styles.progressGrid}>
+        {progressItems.map((item) => {
+          const progressStyle = {
+            "--progress": `${item.percent}%`,
+          } as CSSProperties;
+
+          return (
+            <article className={styles.progressCard} key={item.category}>
+              <div
+                className={styles.progressRing}
+                style={progressStyle}
+                aria-label={`${item.category} ${item.completed}/${item.total} 완료`}
+              >
+                <span>{item.percent}%</span>
+              </div>
+              <div>
+                <strong>{item.category}</strong>
+                <span>
+                  {item.completed}/{item.total} 완료
+                </span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
