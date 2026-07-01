@@ -22,6 +22,9 @@ export type RecordRow = {
   user_id: string;
   type: "daily" | "breath";
   question: string;
+  question_id: string | null;
+  question_type_index: number | null;
+  question_index: number | null;
   category: string | null;
   question_type: string | null;
   question_type_title: string | null;

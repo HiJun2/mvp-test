@@ -23,6 +23,7 @@ import {
 import {
   type CSSProperties,
   type FormEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useRef,
@@ -49,6 +50,8 @@ type BreathQuestion = {
   id?: string;
   typeId: string;
   typeTitle: string;
+  typeIndex: number;
+  questionIndex: number;
   category: string;
   question: string;
 };
@@ -58,6 +61,19 @@ type CategoryProgress = {
   completed: number;
   total: number;
   percent: number;
+  color: string;
+};
+
+type OverallBreathProgress = {
+  completed: number;
+  goal: number;
+  percent: number;
+  gradient: string;
+  segments: Array<{
+    category: string;
+    count: number;
+    color: string;
+  }>;
 };
 
 type User = {
@@ -71,6 +87,9 @@ type VoiceRecord = {
   id: string;
   type: RecordType;
   question: string;
+  questionId?: string;
+  questionTypeIndex?: number;
+  questionIndex?: number;
   category?: string;
   questionType?: string;
   questionTypeTitle?: string;
@@ -82,6 +101,9 @@ type VoiceRecord = {
 type PendingVoiceRecord = {
   type: RecordType;
   question: string;
+  questionId?: string;
+  questionTypeIndex?: number;
+  questionIndex?: number;
   category?: string;
   questionType?: string;
   questionTypeTitle?: string;
@@ -92,8 +114,24 @@ type PendingVoiceRecord = {
 };
 
 const FONT_KEY = "breath.fontSize";
+const DEFAULT_BREATH_GOAL = 50;
 const DAILY_QUESTION =
   "오늘 하루에 대해서 말씀해 주시겠어요? 있었던 일이나, 현재 기분 등 어떤 것이든 편하게 들려주세요.";
+const CATEGORY_COLORS = [
+  "#5f8f7b",
+  "#a87457",
+  "#6f8fb9",
+  "#c06f7f",
+  "#b89b45",
+  "#7b76b9",
+  "#4f9a9a",
+  "#c0845a",
+  "#8a9860",
+  "#9b6d9f",
+  "#5d83a6",
+  "#b56b5f",
+  "#6e9a70",
+];
 
 const BREATH_QUESTION_GROUPS = [
   {
@@ -235,10 +273,12 @@ const BREATH_QUESTION_GROUPS = [
 ] as const;
 
 const BREATH_QUESTIONS: BreathQuestion[] = BREATH_QUESTION_GROUPS.flatMap(
-  (group) =>
-    group.questions.map((item) => ({
+  (group, groupIndex) =>
+    group.questions.map((item, questionIndex) => ({
       typeId: group.typeId,
       typeTitle: group.typeTitle,
+      typeIndex: groupIndex + 1,
+      questionIndex: questionIndex + 1,
       category: item.category,
       question: item.question,
     })),
@@ -283,19 +323,29 @@ function getCategoryProgress(
     {
       category: string;
       order: number;
-      slots: Set<string>;
+      slots: Array<{
+        keys: string[];
+      }>;
+      color: string;
     }
   >();
+  const categoryOrder = new Map<string, number>();
 
   questions.forEach((question, index) => {
-    const slotKey = `${question.typeId}:${question.category}`;
+    if (!categoryOrder.has(question.category)) {
+      categoryOrder.set(question.category, categoryOrder.size);
+    }
+
     const categoryProgress = categorySlots.get(question.category) ?? {
       category: question.category,
       order: index,
-      slots: new Set<string>(),
+      slots: [],
+      color: getCategoryColor(categoryOrder.get(question.category) ?? 0),
     };
 
-    categoryProgress.slots.add(slotKey);
+    categoryProgress.slots.push({
+      keys: getQuestionMatchKeys(question),
+    });
     categoryProgress.order = Math.min(categoryProgress.order, index);
     categorySlots.set(question.category, categoryProgress);
   });
@@ -306,18 +356,23 @@ function getCategoryProgress(
         (record) =>
           record.type === "breath" && record.category && record.questionType,
       )
-      .map((record) => `${record.questionType}:${record.category}`),
+      .flatMap(getRecordMatchKeys),
   );
 
   const progressItems = Array.from(categorySlots.values())
     .map((item) => {
-      const slots = Array.from(item.slots);
-      const completed = slots.filter((slot) => completedSlots.has(slot)).length;
+      const completed = item.slots.filter((slot) =>
+        slot.keys.some((key) => completedSlots.has(key)),
+      ).length;
       return {
         category: item.category,
         completed,
-        total: slots.length,
-        percent: slots.length > 0 ? Math.round((completed / slots.length) * 100) : 0,
+        total: item.slots.length,
+        percent:
+          item.slots.length > 0
+            ? Math.round((completed / item.slots.length) * 100)
+            : 0,
+        color: item.color,
         order: item.order,
       };
     })
@@ -328,7 +383,102 @@ function getCategoryProgress(
     completed: item.completed,
     total: item.total,
     percent: item.percent,
+    color: item.color,
   }));
+}
+
+function getOverallBreathProgress(
+  records: VoiceRecord[],
+  progressItems: CategoryProgress[],
+  breathGoal: number,
+): OverallBreathProgress {
+  const safeGoal = Math.max(1, Math.round(breathGoal || DEFAULT_BREATH_GOAL));
+  const breathRecords = records.filter((record) => record.type === "breath");
+  const colorByCategory = new Map(
+    progressItems.map((item) => [item.category, item.color]),
+  );
+  const categoryOrder = new Map(
+    progressItems.map((item, index) => [item.category, index]),
+  );
+  const counts = new Map<string, number>();
+
+  breathRecords.forEach((record) => {
+    const category = record.category ?? "기타";
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+    if (!colorByCategory.has(category)) {
+      colorByCategory.set(category, getCategoryColor(colorByCategory.size));
+    }
+  });
+
+  const segments = Array.from(counts.entries())
+    .sort(
+      ([leftCategory], [rightCategory]) =>
+        (categoryOrder.get(leftCategory) ?? 999) -
+        (categoryOrder.get(rightCategory) ?? 999),
+    )
+    .reduce<OverallBreathProgress["segments"]>((items, [category, count]) => {
+      const usedCount = items.reduce((total, item) => total + item.count, 0);
+      const remaining = safeGoal - usedCount;
+      if (remaining <= 0) {
+        return items;
+      }
+      return [
+        ...items,
+        {
+          category,
+          count: Math.min(count, remaining),
+          color: colorByCategory.get(category) ?? getCategoryColor(items.length),
+        },
+      ];
+    }, []);
+
+  return {
+    completed: breathRecords.length,
+    goal: safeGoal,
+    percent: Math.min(100, Math.round((breathRecords.length / safeGoal) * 100)),
+    gradient: getOverallProgressGradient(segments, safeGoal),
+    segments,
+  };
+}
+
+function getQuestionMatchKeys(question: BreathQuestion) {
+  return [
+    question.id ? `id:${question.id}` : "",
+    `indexed:${question.typeId}:${question.questionIndex}`,
+    `legacy:${question.typeId}:${question.category}`,
+  ].filter(Boolean);
+}
+
+function getRecordMatchKeys(record: VoiceRecord) {
+  return [
+    record.questionId ? `id:${record.questionId}` : "",
+    record.questionType && record.questionIndex
+      ? `indexed:${record.questionType}:${record.questionIndex}`
+      : "",
+    record.questionType && record.category
+      ? `legacy:${record.questionType}:${record.category}`
+      : "",
+  ].filter(Boolean);
+}
+
+function getCategoryColor(index: number) {
+  return CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+}
+
+function getOverallProgressGradient(
+  segments: OverallBreathProgress["segments"],
+  goal: number,
+) {
+  let cursor = 0;
+  const parts = segments.map((segment) => {
+    const start = (cursor / goal) * 100;
+    cursor += segment.count;
+    const end = (cursor / goal) * 100;
+    return `${segment.color} ${start}% ${end}%`;
+  });
+  const emptyStart = Math.min(100, (cursor / goal) * 100);
+  parts.push(`#e7ddd2 ${emptyStart}% 100%`);
+  return `conic-gradient(${parts.join(", ")})`;
 }
 
 async function apiJson<T>(path: string, init: RequestInit = {}) {
@@ -376,6 +526,7 @@ export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState("2026-06-23");
   const [playingRecordId, setPlayingRecordId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [breathGoal, setBreathGoal] = useState(DEFAULT_BREATH_GOAL);
 
   const dailyCount = records.filter((record) => record.type === "daily").length;
   const breathCount = records.filter((record) => record.type === "breath").length;
@@ -391,6 +542,10 @@ export default function HomePage() {
     () => getCategoryProgress(breathQuestions, records),
     [breathQuestions, records],
   );
+  const overallBreathProgress = useMemo(
+    () => getOverallBreathProgress(records, categoryProgress, breathGoal),
+    [records, categoryProgress, breathGoal],
+  );
 
   useEffect(() => {
     const storedFontSize = window.localStorage.getItem(FONT_KEY) as FontSize | null;
@@ -400,7 +555,14 @@ export default function HomePage() {
     }
 
     let active = true;
+    let bootstrapFinished = false;
     const splashStartedAt = Date.now();
+    const splashFallback = window.setTimeout(() => {
+      if (active && !bootstrapFinished) {
+        setHydrated(true);
+        setScreen("auth");
+      }
+    }, 3200);
 
     async function bootstrap() {
       let nextScreen: Screen = "auth";
@@ -419,6 +581,8 @@ export default function HomePage() {
       } catch {
         nextScreen = "auth";
       } finally {
+        bootstrapFinished = true;
+        window.clearTimeout(splashFallback);
         const elapsed = Date.now() - splashStartedAt;
         window.setTimeout(
           () => {
@@ -436,6 +600,7 @@ export default function HomePage() {
 
     return () => {
       active = false;
+      window.clearTimeout(splashFallback);
     };
   }, []);
 
@@ -471,6 +636,27 @@ export default function HomePage() {
     }
 
     loadQuestions();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSettings() {
+      try {
+        const response = await apiJson<{ breathGoal: number }>("/api/settings");
+        if (active && Number.isFinite(response.breathGoal) && response.breathGoal > 0) {
+          setBreathGoal(Math.round(response.breathGoal));
+        }
+      } catch {
+        setBreathGoal(DEFAULT_BREATH_GOAL);
+      }
+    }
+
+    loadSettings();
 
     return () => {
       active = false;
@@ -570,6 +756,9 @@ export default function HomePage() {
     const form = new FormData();
     form.append("type", record.type);
     form.append("question", record.question);
+    form.append("questionId", record.questionId ?? "");
+    form.append("questionTypeIndex", String(record.questionTypeIndex ?? ""));
+    form.append("questionIndex", String(record.questionIndex ?? ""));
     form.append("category", record.category ?? "");
     form.append("questionType", record.questionType ?? "");
     form.append("questionTypeTitle", record.questionTypeTitle ?? "");
@@ -645,27 +834,37 @@ export default function HomePage() {
       return;
     }
 
-    const completedCategories = new Set(
-      records
-        .filter((record) => record.type === "breath" && record.category)
-        .map((record) => record.category),
-    );
     const recordedQuestionKeys = new Set(
       records
         .filter((record) => record.type === "breath" && record.category)
-        .map((record) => `${record.questionType}:${record.category}`),
+        .flatMap(getRecordMatchKeys),
     );
+    const categoryCompletion = new Map<
+      string,
+      {
+        completed: number;
+        total: number;
+      }
+    >();
+
+    breathQuestions.forEach((question) => {
+      const currentProgress = categoryCompletion.get(question.category) ?? {
+        completed: 0,
+        total: 0,
+      };
+      currentProgress.total += 1;
+      if (getQuestionMatchKeys(question).some((key) => recordedQuestionKeys.has(key))) {
+        currentProgress.completed += 1;
+      }
+      categoryCompletion.set(question.category, currentProgress);
+    });
 
     let category = selectedBreathQuestion?.category;
 
     if (!keepCategory || !category) {
-      const openCategories = Array.from(
-        new Set(
-          breathQuestions.map((question) => question.category).filter(
-            (questionCategory) => !completedCategories.has(questionCategory),
-          ),
-        ),
-      );
+      const openCategories = Array.from(categoryCompletion.entries())
+        .filter(([, progress]) => progress.completed < progress.total)
+        .map(([questionCategory]) => questionCategory);
       category = getRandomItem(
         openCategories.length > 0
           ? openCategories
@@ -676,7 +875,7 @@ export default function HomePage() {
     const availableQuestions = breathQuestions.filter(
       (question) =>
         question.category === category &&
-        !recordedQuestionKeys.has(`${question.typeId}:${question.category}`) &&
+        !getQuestionMatchKeys(question).some((key) => recordedQuestionKeys.has(key)) &&
         (!keepCategory ||
           !selectedBreathQuestion ||
           question.typeId !== selectedBreathQuestion.typeId),
@@ -764,7 +963,7 @@ export default function HomePage() {
 
       {screen === "dailyRecord" && (
         <RecordingScreen
-          title="오늘의 기록"
+          title="일상 기록"
           eyebrow="일상 기록"
           question={DAILY_QUESTION}
           recordType="daily"
@@ -789,6 +988,9 @@ export default function HomePage() {
           title="숨결 기록"
           eyebrow={selectedBreathQuestion.category}
           question={selectedBreathQuestion.question}
+          questionId={selectedBreathQuestion.id}
+          questionTypeIndex={selectedBreathQuestion.typeIndex}
+          questionIndex={selectedBreathQuestion.questionIndex}
           questionType={selectedBreathQuestion.typeId}
           questionTypeTitle={selectedBreathQuestion.typeTitle}
           category={selectedBreathQuestion.category}
@@ -806,6 +1008,7 @@ export default function HomePage() {
         <WarehouseScreen
           records={sortedRecords}
           categoryProgress={categoryProgress}
+          overallBreathProgress={overallBreathProgress}
           selectedDate={selectedDate}
           selectedMonth={selectedMonth}
           playingRecordId={playingRecordId}
@@ -840,6 +1043,7 @@ export default function HomePage() {
               userName={userName}
               dailyCount={dailyCount}
               breathCount={breathCount}
+              breathGoal={breathGoal}
               records={sortedRecords}
               playingRecordId={playingRecordId}
               onClose={() => setDrawerOpen(false)}
@@ -1030,16 +1234,16 @@ function DailyIntroScreen({
 }) {
   return (
     <section className={styles.screen}>
-      <ScreenLabel title="오늘의 기록" tone="blue" />
+      <ScreenLabel title="일상 기록" tone="blue" />
       <div className={styles.questionPanel}>
-        <span className={styles.kicker}>오늘의 질문</span>
+        <span className={styles.kicker}>일상 질문</span>
         <h1>오늘 하루에 대해서 말씀해 주시겠어요?</h1>
         <p>있었던 일이나, 현재 기분 등 어떤 것이든 편하게 들려주세요.</p>
       </div>
       <div className={styles.actionStack}>
         <button className={styles.primaryButton} onClick={onDailyRecord}>
           <Mic size={19} />
-          네, 오늘 하루에 대해서 기록할래요
+          네, 일상 기록을 남길래요
         </button>
         <button className={styles.secondaryButton} onClick={onBreathRecord}>
           <ChevronRight size={19} />
@@ -1068,6 +1272,8 @@ function BreathIntroScreen({
       <ScreenLabel title="숨결 기록" tone="sage" />
       <div className={styles.questionPanel}>
         <div className={styles.questionMeta}>
+          <span>유형 {question.typeIndex}</span>
+          <span>질문 {question.questionIndex}</span>
           <span>{question.category}</span>
           <span>{question.typeTitle}</span>
         </div>
@@ -1097,6 +1303,9 @@ function RecordingScreen({
   eyebrow,
   question,
   recordType,
+  questionId,
+  questionTypeIndex,
+  questionIndex,
   category,
   questionType,
   questionTypeTitle,
@@ -1108,6 +1317,9 @@ function RecordingScreen({
   eyebrow: string;
   question: string;
   recordType: RecordType;
+  questionId?: string;
+  questionTypeIndex?: number;
+  questionIndex?: number;
   category?: string;
   questionType?: string;
   questionTypeTitle?: string;
@@ -1176,6 +1388,9 @@ function RecordingScreen({
           const savedRecord = await onSave({
             type: recordType,
             question,
+            questionId,
+            questionTypeIndex,
+            questionIndex,
             category,
             questionType,
             questionTypeTitle,
@@ -1274,6 +1489,7 @@ function RecordingScreen({
 function WarehouseScreen({
   records,
   categoryProgress,
+  overallBreathProgress,
   selectedDate,
   selectedMonth,
   playingRecordId,
@@ -1284,6 +1500,7 @@ function WarehouseScreen({
 }: {
   records: VoiceRecord[];
   categoryProgress: CategoryProgress[];
+  overallBreathProgress: OverallBreathProgress;
   selectedDate: string;
   selectedMonth: number;
   playingRecordId: string | null;
@@ -1324,6 +1541,7 @@ function WarehouseScreen({
         </div>
       </div>
 
+      <OverallProgressPanel progress={overallBreathProgress} />
       <CategoryProgressPanel progressItems={categoryProgress} />
 
       {viewMode === "calendar" ? (
@@ -1358,6 +1576,46 @@ function WarehouseScreen({
   );
 }
 
+function OverallProgressPanel({
+  progress,
+}: {
+  progress: OverallBreathProgress;
+}) {
+  const progressStyle = {
+    "--overall-progress": progress.gradient,
+  } as CSSProperties;
+
+  return (
+    <section className={styles.overallProgressPanel} aria-label="전체 숨결 성취도">
+      <div
+        className={styles.overallProgressRing}
+        style={progressStyle}
+        aria-label={`전체 숨결 기록 ${progress.completed}/${progress.goal} 완료`}
+      >
+        <span>{progress.percent}%</span>
+      </div>
+      <div className={styles.overallProgressCopy}>
+        <span className={styles.kicker}>통합 성취도</span>
+        <h2>
+          {progress.completed}/{progress.goal}개의 답변
+        </h2>
+        <div className={styles.segmentLegend}>
+          {progress.segments.length === 0 ? (
+            <span>아직 완료한 숨결 기록이 없어요.</span>
+          ) : (
+            progress.segments.map((segment) => (
+              <span key={segment.category}>
+                <i style={{ background: segment.color }} />
+                {segment.category} {segment.count}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CategoryProgressPanel({
   progressItems,
 }: {
@@ -1379,6 +1637,7 @@ function CategoryProgressPanel({
         {progressItems.map((item) => {
           const progressStyle = {
             "--progress": `${item.percent}%`,
+            "--category-color": item.color,
           } as CSSProperties;
 
           return (
@@ -1563,7 +1822,7 @@ function NavigationBar({
         onClick={onDaily}
       >
         <Mic size={19} />
-        오늘
+        일상
       </button>
       <button
         className={
@@ -1599,6 +1858,7 @@ function Drawer({
   userName,
   dailyCount,
   breathCount,
+  breathGoal,
   records,
   playingRecordId,
   onClose,
@@ -1611,6 +1871,7 @@ function Drawer({
   userName: string;
   dailyCount: number;
   breathCount: number;
+  breathGoal: number;
   records: VoiceRecord[];
   playingRecordId: string | null;
   onClose: () => void;
@@ -1619,8 +1880,7 @@ function Drawer({
   onPlayToggle: (recordId: string | null) => void;
   onDelete: (recordId: string) => void;
 }) {
-  const dailyRecords = records.filter((record) => record.type === "daily");
-  const breathRecords = records.filter((record) => record.type === "breath");
+  const recentRecords = records.slice(0, 5);
 
   return (
     <div className={`${styles.drawerLayer} ${open ? styles.openDrawer : ""}`}>
@@ -1642,7 +1902,7 @@ function Drawer({
         <button className={styles.storageSummary} onClick={onWarehouse}>
           <span>숨결창고</span>
           <strong>일상 기록 횟수 {dailyCount}회</strong>
-          <strong>숨결 기록 횟수 {breathCount}/50회</strong>
+          <strong>숨결 기록 횟수 {breathCount}/{breathGoal}회</strong>
         </button>
         <div className={styles.drawerActions}>
           <button onClick={onWarehouse}>
@@ -1657,18 +1917,14 @@ function Drawer({
         <div className={styles.drawerLists}>
           <RecordList
             compact
-            title="일상 기록"
-            records={dailyRecords}
-            emptyText="일상 기록이 아직 없어요."
-            playingRecordId={playingRecordId}
-            onPlayToggle={onPlayToggle}
-            onDelete={onDelete}
-          />
-          <RecordList
-            compact
-            title="숨결 기록"
-            records={breathRecords}
-            emptyText="숨결 기록이 아직 없어요."
+            title="최근 기록"
+            titleAction={
+              <button className={styles.moreButton} onClick={onWarehouse}>
+                더보기
+              </button>
+            }
+            records={recentRecords}
+            emptyText="아직 저장된 기록이 없어요."
             playingRecordId={playingRecordId}
             onPlayToggle={onPlayToggle}
             onDelete={onDelete}
@@ -1681,6 +1937,7 @@ function Drawer({
 
 function RecordList({
   title,
+  titleAction,
   records,
   emptyText,
   compact = false,
@@ -1689,6 +1946,7 @@ function RecordList({
   onDelete,
 }: {
   title: string;
+  titleAction?: ReactNode;
   records: VoiceRecord[];
   emptyText: string;
   compact?: boolean;
@@ -1698,7 +1956,10 @@ function RecordList({
 }) {
   return (
     <div className={compact ? styles.compactList : styles.recordList}>
-      <h2>{title}</h2>
+      <div className={styles.listHeader}>
+        <h2>{title}</h2>
+        {titleAction}
+      </div>
       {records.length === 0 ? (
         <p className={styles.emptyText}>{emptyText}</p>
       ) : (
@@ -1753,7 +2014,7 @@ function getScreenTitle(screen: Screen) {
   switch (screen) {
     case "dailyIntro":
     case "dailyRecord":
-      return "오늘의 기록";
+      return "일상 기록";
     case "breathIntro":
     case "breathRecord":
       return "숨결 기록";

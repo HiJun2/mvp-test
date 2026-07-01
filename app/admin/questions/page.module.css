@@ -40,6 +40,7 @@
 
 .authRow,
 .toolbar,
+.goalPanel,
 .groupList {
   max-width: 1120px;
   margin: 0 auto;
@@ -128,6 +129,24 @@
   color: #fff !important;
 }
 
+.goalPanel {
+  align-items: end;
+  background: #fffaf4;
+  border: 1px solid #e5d9cf;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  margin-bottom: 14px;
+  padding: 16px;
+}
+
+.goalPanel p {
+  color: #6f6258;
+  line-height: 1.6;
+  margin: 0;
+}
+
 .status,
 .empty {
   max-width: 1120px;
@@ -151,6 +170,29 @@
   padding: 16px;
 }
 
+.indexBadge,
+.questionIndex {
+  align-items: center;
+  background: #efe7dc;
+  border-radius: 999px;
+  color: #5b4034;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 0 10px;
+  width: fit-content;
+}
+
+.indexBadge {
+  margin-bottom: 12px;
+}
+
+.questionIndex {
+  align-self: center;
+  white-space: nowrap;
+}
+
 .groupHeader {
   align-items: end;
   display: grid;
@@ -169,7 +211,8 @@
   border-top: 1px solid #eaded5;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(120px, 0.45fr) minmax(260px, 1fr) auto auto;
+  grid-template-columns:
+    auto minmax(120px, 0.45fr) minmax(260px, 1fr) auto auto;
   padding-top: 12px;
 }
 
@@ -212,6 +255,7 @@
 
   .authRow,
   .toolbar,
+  .goalPanel,
   .groupHeader,
   .questionRow {
     align-items: stretch;
@@ -219,7 +263,8 @@
   }
 
   .authRow,
-  .toolbar {
+  .toolbar,
+  .goalPanel {
     display: grid;
   }
 

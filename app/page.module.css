@@ -20,6 +20,7 @@
 .splash {
   width: min(100%, 430px);
   min-height: 100dvh;
+  min-height: 100svh;
   margin: 0 auto;
   background: var(--surface);
   color: var(--ink);
@@ -409,6 +410,85 @@
   padding: 18px;
 }
 
+.overallProgressPanel {
+  margin-top: 16px;
+  background: var(--ink);
+  color: #fffaf2;
+  border-radius: 8px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.overallProgressRing {
+  width: 118px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--overall-progress, conic-gradient(#e7ddd2 0 100%));
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.overallProgressRing::after {
+  content: "";
+  position: absolute;
+  inset: 15px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.overallProgressRing span {
+  position: relative;
+  z-index: 1;
+  font-size: 1.2em;
+  font-weight: 900;
+}
+
+.overallProgressCopy {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.overallProgressCopy .kicker {
+  color: #d8cbbd;
+}
+
+.overallProgressCopy h2 {
+  margin: 0;
+  font-size: 1.24em;
+  letter-spacing: 0;
+}
+
+.segmentLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.segmentLegend span {
+  min-height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.1);
+  color: #f8efe4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 0.8em;
+  font-weight: 900;
+}
+
+.segmentLegend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
 .progressHeader {
   display: flex;
   align-items: flex-start;
@@ -458,7 +538,7 @@
   aspect-ratio: 1;
   border-radius: 50%;
   background: conic-gradient(
-    var(--sage) var(--progress),
+    var(--category-color, var(--sage)) var(--progress),
     #e7ddd2 var(--progress)
   );
   display: grid;
@@ -566,8 +646,30 @@
 
 .recordList h2,
 .compactList h2 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 1.06em;
+}
+
+.listHeader {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.moreButton {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f1eae0;
+  color: var(--ink);
+  padding: 0 12px;
+  font-size: 0.85em;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .recordItem {
@@ -818,5 +920,17 @@
   .bottomNav {
     border-left: 1px solid rgba(35, 33, 31, 0.08);
     border-right: 1px solid rgba(35, 33, 31, 0.08);
+  }
+}
+
+@media (max-width: 380px) {
+  .overallProgressPanel {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .segmentLegend {
+    justify-content: center;
   }
 }

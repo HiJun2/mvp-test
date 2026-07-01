@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS records (
   user_id TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('daily', 'breath')),
   question TEXT NOT NULL,
+  question_id TEXT,
+  question_type_index INTEGER,
+  question_index INTEGER,
   category TEXT,
   question_type TEXT,
   question_type_title TEXT,
@@ -59,3 +62,9 @@ CREATE TABLE IF NOT EXISTS questions (
 
 CREATE INDEX IF NOT EXISTS idx_questions_type_order
 ON questions(type_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

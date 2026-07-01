@@ -2,7 +2,9 @@ import { randomId } from "../../_shared/crypto";
 import { errorResponse, jsonResponse, readJson } from "../../_shared/http";
 import {
   ensureQuestionTables,
+  getBreathGoal,
   requireAdmin,
+  setBreathGoal,
   type QuestionRow,
   type QuestionTypeRow,
 } from "../../_shared/questions";
@@ -26,6 +28,9 @@ type AdminQuestionGroup = {
 
 type SaveBody = {
   groups?: AdminQuestionGroup[];
+  settings?: {
+    breathGoal?: number;
+  };
 };
 
 export async function onRequestGet({ request, env }: PagesContext) {
@@ -51,6 +56,9 @@ export async function onRequestGet({ request, env }: PagesContext) {
   ]);
 
   return jsonResponse({
+    settings: {
+      breathGoal: await getBreathGoal(db),
+    },
     groups: typeRows.map((typeRow) => ({
       typeId: typeRow.id,
       typeTitle: typeRow.title,
@@ -87,6 +95,9 @@ export async function onRequestPost({ request, env }: PagesContext) {
 
   await ensureQuestionTables(db);
   const now = new Date().toISOString();
+  if (body.settings?.breathGoal !== undefined) {
+    await setBreathGoal(db, Number(body.settings.breathGoal));
+  }
 
   for (let groupIndex = 0; groupIndex < body.groups.length; groupIndex += 1) {
     const group = body.groups[groupIndex];

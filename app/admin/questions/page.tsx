@@ -29,6 +29,7 @@ type AdminQuestionGroup = {
 };
 
 const PASSWORD_KEY = "breath.adminPassword";
+const DEFAULT_BREATH_GOAL = 50;
 
 const DEFAULT_GROUPS: AdminQuestionGroup[] = [
   {
@@ -195,6 +196,7 @@ const DEFAULT_GROUPS: AdminQuestionGroup[] = [
 export default function AdminQuestionsPage() {
   const [password, setPassword] = useState("");
   const [groups, setGroups] = useState<AdminQuestionGroup[]>([]);
+  const [breathGoal, setBreathGoal] = useState(DEFAULT_BREATH_GOAL);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const activeQuestionCount = useMemo(
@@ -243,10 +245,18 @@ export default function AdminQuestionsPage() {
     setStatus("");
     try {
       window.sessionStorage.setItem(PASSWORD_KEY, password);
-      const data = await adminRequest<{ groups: AdminQuestionGroup[] }>(
-        "/api/admin/questions",
-      );
+      const data = await adminRequest<{
+        groups: AdminQuestionGroup[];
+        settings?: { breathGoal?: number };
+      }>("/api/admin/questions");
       setGroups(data.groups);
+      if (
+        data.settings?.breathGoal &&
+        Number.isFinite(data.settings.breathGoal) &&
+        data.settings.breathGoal > 0
+      ) {
+        setBreathGoal(Math.round(data.settings.breathGoal));
+      }
       setStatus(
         data.groups.length > 0
           ? "DB 질문지를 불러왔어요."
@@ -272,6 +282,9 @@ export default function AdminQuestionsPage() {
       await adminRequest<{ ok: boolean }>("/api/admin/questions", {
         method: "POST",
         body: JSON.stringify({
+          settings: {
+            breathGoal,
+          },
           groups: groups.map((group, groupIndex) => ({
             ...group,
             sortOrder: groupIndex,
@@ -417,6 +430,26 @@ export default function AdminQuestionsPage() {
         </button>
       </section>
 
+      <section className={styles.goalPanel}>
+        <label>
+          통합 성취도 목표 답변 수
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={breathGoal}
+            onChange={(event) =>
+              setBreathGoal(
+                Math.max(1, Math.round(Number(event.target.value) || 1)),
+              )
+            }
+          />
+        </label>
+        <p>
+          숨결창고 맨 위 원형차트의 기준값입니다. 기본값은 50개 답변이에요.
+        </p>
+      </section>
+
       {status && <p className={styles.status}>{status}</p>}
 
       <section className={styles.groupList}>
@@ -427,6 +460,7 @@ export default function AdminQuestionsPage() {
         ) : (
           groups.map((group, groupIndex) => (
             <article className={styles.groupPanel} key={group.typeId ?? groupIndex}>
+              <span className={styles.indexBadge}>질문유형 {groupIndex + 1}</span>
               <div className={styles.groupHeader}>
                 <label>
                   질문유형
@@ -455,6 +489,9 @@ export default function AdminQuestionsPage() {
                     className={styles.questionRow}
                     key={question.id ?? `${groupIndex}-${questionIndex}`}
                   >
+                    <span className={styles.questionIndex}>
+                      질문 {questionIndex + 1}
+                    </span>
                     <label>
                       카테고리
                       <input

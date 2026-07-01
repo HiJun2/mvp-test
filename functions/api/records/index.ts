@@ -12,9 +12,16 @@ export async function onRequestGet({ request, env }: PagesContext) {
   if (!db) {
     return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
   }
+  await ensureRecordQuestionColumns(db);
 
   const { results } = await db.prepare(
-    "SELECT id, user_id, type, question, category, question_type, question_type_title, duration_seconds, r2_key, mime_type, created_at FROM records WHERE user_id = ? ORDER BY created_at DESC",
+    `SELECT
+      id, user_id, type, question, question_id, question_type_index, question_index,
+      category, question_type, question_type_title, duration_seconds, r2_key,
+      mime_type, created_at
+    FROM records
+    WHERE user_id = ?
+    ORDER BY created_at DESC`,
   )
     .bind(user.id)
     .all<RecordRow>();
@@ -33,11 +40,15 @@ export async function onRequestPost({ request, env }: PagesContext) {
   if (!db) {
     return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
   }
+  await ensureRecordQuestionColumns(db);
 
   const form = await request.formData();
   const audio = form.get("audio");
   const type = String(form.get("type") ?? "");
   const question = String(form.get("question") ?? "").trim();
+  const questionId = optionalString(form.get("questionId"));
+  const questionTypeIndex = optionalNumber(form.get("questionTypeIndex"));
+  const questionIndex = optionalNumber(form.get("questionIndex"));
   const category = optionalString(form.get("category"));
   const questionType = optionalString(form.get("questionType"));
   const questionTypeTitle = optionalString(form.get("questionTypeTitle"));
@@ -77,15 +88,19 @@ export async function onRequestPost({ request, env }: PagesContext) {
 
   await db.prepare(
     `INSERT INTO records (
-      id, user_id, type, question, category, question_type, question_type_title,
-      duration_seconds, r2_key, mime_type, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, user_id, type, question, question_id, question_type_index, question_index,
+      category, question_type, question_type_title, duration_seconds, r2_key,
+      mime_type, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       recordId,
       user.id,
       type,
       question,
+      questionId,
+      questionTypeIndex,
+      questionIndex,
       category,
       questionType,
       questionTypeTitle,
@@ -102,6 +117,9 @@ export async function onRequestPost({ request, env }: PagesContext) {
         id: recordId,
         type,
         question,
+        questionId,
+        questionTypeIndex,
+        questionIndex,
         category,
         questionType,
         questionTypeTitle,
@@ -119,11 +137,41 @@ function optionalString(value: FormDataEntryValue | null) {
   return text || null;
 }
 
+function optionalNumber(value: FormDataEntryValue | null) {
+  const numberValue = Number(typeof value === "string" ? value : "");
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? Math.round(numberValue)
+    : null;
+}
+
+async function ensureRecordQuestionColumns(db: ReturnType<typeof getDb>) {
+  if (!db) {
+    return;
+  }
+
+  const statements = [
+    "ALTER TABLE records ADD COLUMN question_id TEXT",
+    "ALTER TABLE records ADD COLUMN question_type_index INTEGER",
+    "ALTER TABLE records ADD COLUMN question_index INTEGER",
+  ];
+
+  for (const statement of statements) {
+    try {
+      await db.prepare(statement).run();
+    } catch {
+      // 이미 존재하는 컬럼이면 그대로 사용한다.
+    }
+  }
+}
+
 function toClientRecord(record: RecordRow) {
   return {
     id: record.id,
     type: record.type,
     question: record.question,
+    questionId: record.question_id ?? undefined,
+    questionTypeIndex: record.question_type_index ?? undefined,
+    questionIndex: record.question_index ?? undefined,
     category: record.category ?? undefined,
     questionType: record.question_type ?? undefined,
     questionTypeTitle: record.question_type_title ?? undefined,
