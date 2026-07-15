@@ -34,10 +34,10 @@ export async function onRequestDelete({
     return errorResponse("기록을 찾을 수 없어요.", 404);
   }
 
-  await env.RECORDINGS.delete(record.r2_key);
   await db.prepare("DELETE FROM records WHERE id = ? AND user_id = ?")
     .bind(params.id, user.id)
     .run();
+  await env.RECORDINGS.delete(record.r2_key).catch(() => undefined);
 
   return jsonResponse({ ok: true });
 }

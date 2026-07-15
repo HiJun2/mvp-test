@@ -32,6 +32,11 @@ export type RecordRow = {
   r2_key: string;
   mime_type: string;
   created_at: string;
+  image_id: string | null;
+  image_r2_key: string | null;
+  image_version: number | null;
+  image_description: string | null;
+  local_date: string | null;
 };
 
 export type D1Database = {

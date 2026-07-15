@@ -20,13 +20,13 @@ export type QuestionRow = {
 export type PublicQuestionRow = QuestionRow & {
   type_title: string;
   type_sort_order: number;
+  category_key: string;
+  category_icon: string;
+  category_color: string;
+  image_id: string | null;
+  image_description: string | null;
+  image_version: number | null;
 };
-
-type SettingRow = {
-  value: string;
-};
-
-export const DEFAULT_BREATH_GOAL = 50;
 
 export async function ensureQuestionTables(db: D1Database) {
   await db.prepare(
@@ -57,38 +57,6 @@ export async function ensureQuestionTables(db: D1Database) {
   await db.prepare(
     "CREATE INDEX IF NOT EXISTS idx_questions_type_order ON questions(type_id, sort_order)",
   ).run();
-
-  await db.prepare(
-    `CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )`,
-  ).run();
-}
-
-export async function getBreathGoal(db: D1Database) {
-  await ensureQuestionTables(db);
-  const row = await db.prepare("SELECT value FROM app_settings WHERE key = ?")
-    .bind("breath_goal")
-    .first<SettingRow>();
-  const goal = Number(row?.value ?? DEFAULT_BREATH_GOAL);
-  return Number.isFinite(goal) && goal > 0 ? Math.round(goal) : DEFAULT_BREATH_GOAL;
-}
-
-export async function setBreathGoal(db: D1Database, goal: number) {
-  const safeGoal = Number.isFinite(goal) && goal > 0 ? Math.round(goal) : DEFAULT_BREATH_GOAL;
-  await ensureQuestionTables(db);
-  await db.prepare(
-    `INSERT INTO app_settings (key, value, updated_at)
-    VALUES (?, ?, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value,
-      updated_at = excluded.updated_at`,
-  )
-    .bind("breath_goal", String(safeGoal), new Date().toISOString())
-    .run();
-  return safeGoal;
 }
 
 export function requireAdmin(request: Request, env: Env) {

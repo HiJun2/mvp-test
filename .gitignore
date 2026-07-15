@@ -1,0 +1,5 @@
+.next/
+.wrangler/
+node_modules/
+outputs/
+tsconfig.tsbuildinfo

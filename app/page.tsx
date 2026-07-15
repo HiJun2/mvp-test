@@ -1,51 +1,58 @@
 "use client";
 
 import {
+  Archive,
   ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Brain,
   CalendarDays,
   Check,
-  ChevronLeft,
   ChevronRight,
+  Circle,
   Clock3,
+  Download,
+  Flower2,
+  Gem,
+  Gift,
+  Heart,
   Home,
-  LogIn,
-  Menu,
+  Leaf,
+  Lightbulb,
+  LogOut,
+  MapPin,
+  MessageCircle,
   Mic,
-  PauseCircle,
-  Play,
+  MoreVertical,
+  Pause,
   RotateCcw,
+  Route,
   Settings,
+  Sparkles,
   Trash2,
   UserRound,
-  Warehouse,
-  X,
+  UsersRound,
 } from "lucide-react";
 import {
   type CSSProperties,
   type FormEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { DEFAULT_QUESTION_GROUPS } from "./defaultQuestions";
 import styles from "./page.module.css";
 
-type Screen =
-  | "splash"
-  | "auth"
-  | "register"
-  | "welcome"
-  | "dailyIntro"
-  | "dailyRecord"
-  | "breathIntro"
-  | "breathRecord"
-  | "warehouse"
-  | "settings";
-
+type Screen = "splash" | "auth" | "register" | "home" | "daily" | "breath" | "breathRecord" | "archive" | "settings";
 type RecordType = "daily" | "breath";
 type FontSize = "normal" | "large" | "xlarge";
 
+type User = { id: string; name: string; email: string; createdAt: string };
+type ContentImage = { id: string; description: string; version: number; imageUrl: string };
+type DailyPrompt = { id: string; question: string; helperText: string; isActive: boolean; image: ContentImage | null };
 type BreathQuestion = {
   id?: string;
   typeId: string;
@@ -53,36 +60,12 @@ type BreathQuestion = {
   typeIndex: number;
   questionIndex: number;
   category: string;
+  categoryKey: string;
+  categoryIcon: string;
+  categoryColor: string;
   question: string;
+  image: ContentImage | null;
 };
-
-type CategoryProgress = {
-  category: string;
-  completed: number;
-  total: number;
-  percent: number;
-  color: string;
-};
-
-type OverallBreathProgress = {
-  completed: number;
-  goal: number;
-  percent: number;
-  gradient: string;
-  segments: Array<{
-    category: string;
-    count: number;
-    color: string;
-  }>;
-};
-
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-};
-
 type VoiceRecord = {
   id: string;
   type: RecordType;
@@ -93,12 +76,16 @@ type VoiceRecord = {
   category?: string;
   questionType?: string;
   questionTypeTitle?: string;
-  createdAt: string;
   durationSeconds: number;
+  createdAt: string;
+  localDate?: string;
+  imageId?: string;
+  imageVersion?: number;
+  imageDescription?: string;
+  imageUrl?: string;
   audioUrl: string;
 };
-
-type PendingVoiceRecord = {
+type PendingRecord = {
   type: RecordType;
   question: string;
   questionId?: string;
@@ -107,954 +94,277 @@ type PendingVoiceRecord = {
   category?: string;
   questionType?: string;
   questionTypeTitle?: string;
+  imageId?: string;
   createdAt: string;
   durationSeconds: number;
   audioBlob: Blob;
   mimeType: string;
 };
+type CategoryView = { name: string; key: string; icon: string; color: string };
 
 const FONT_KEY = "breath.fontSize";
-const DEFAULT_BREATH_GOAL = 50;
-const DAILY_QUESTION =
-  "오늘 하루에 대해서 말씀해 주시겠어요? 있었던 일이나, 현재 기분 등 어떤 것이든 편하게 들려주세요.";
-const CATEGORY_COLORS = [
-  "#5f8f7b",
-  "#a87457",
-  "#6f8fb9",
-  "#c06f7f",
-  "#b89b45",
-  "#7b76b9",
-  "#4f9a9a",
-  "#c0845a",
-  "#8a9860",
-  "#9b6d9f",
-  "#5d83a6",
-  "#b56b5f",
-  "#6e9a70",
-];
+const CATEGORY_KEY = "breath.selectedCategory";
+const LAST_SCREEN_KEY = "breath.lastStoryScreen";
+const CATEGORY_ORDER = ["사건", "시간", "사랑", "장소"];
+const CATEGORY_FALLBACKS: Record<string, Omit<CategoryView, "name">> = {
+  사건: { key: "event", icon: "calendar-star", color: "#f06a2a" },
+  시간: { key: "time", icon: "clock-3", color: "#4f7b48" },
+  사랑: { key: "love", icon: "heart", color: "#ed4164" },
+  장소: { key: "place", icon: "map-pin", color: "#3488c9" },
+};
+const FALLBACK_DAILY: DailyPrompt = {
+  id: "daily_default",
+  question: "지금 날씨는 어때?",
+  helperText: "밖의 날씨를 보며 오늘의 기분을 이야기해 주세요.",
+  isActive: true,
+  image: null,
+};
 
-const BREATH_QUESTION_GROUPS = [
-  {
-    typeId: "childhood",
-    typeTitle: "첫기억과 유년의 풍경",
-    questions: [
-      {
-        category: "기억",
-        question:
-          "어릴 적 가장 오래된 기억은 무엇인가요? 그때의 냄새, 소리, 공기의 느낌까지 떠올려보세요.",
-      },
-      {
-        category: "사람",
-        question:
-          "유년 시절, 당신에게 따뜻함을 가르쳐준 사람은 누구였나요? 그 사람에게 어떤 감정을 느꼈나요?",
-      },
-      {
-        category: "장소",
-        question:
-          "마음속에 가장 선명하게 남아 있는 어린 시절의 공간은 어디인가요?",
-      },
-      {
-        category: "감정",
-        question:
-          "유년기에 느꼈던 두려움, 기쁨, 혹은 외로움은 언제 찾아왔나요?",
-      },
-      {
-        category: "사건",
-        question:
-          "어린 시절 잊을 수 없는 사건이 있다면, 그때의 상황을 자세히 떠올려보세요.",
-      },
-      {
-        category: "의미",
-        question: "그 경험이 지금의 나에게 어떤 의미로 남아 있나요?",
-      },
-      {
-        category: "배움",
-        question:
-          "어린 시절 실수나 도전에서 배운 삶의 교훈은 무엇인가요?",
-      },
-      {
-        category: "전환",
-        question:
-          "‘아이’에서 ‘학생’으로 스스로 변했다고 느낀 순간이 있었나요?",
-      },
-      {
-        category: "가치",
-        question:
-          "유년기부터 지금까지 이어져 온 나만의 습관이나 신념은 무엇인가요?",
-      },
-      {
-        category: "감사",
-        question:
-          "어린 시절의 가족이나 주변 사람에게 지금 감사하고 싶은 이유는 무엇인가요?",
-      },
-      {
-        category: "관계",
-        question:
-          "유년기에 만난 한 사람이 지금의 나에게 어떤 영향을 주었나요?",
-      },
-      {
-        category: "철학",
-        question: "그 시절의 나에게 ‘행복’은 어떤 모습이었나요?",
-      },
-      {
-        category: "유산",
-        question:
-          "어린 시절의 나로부터 지금까지 이어져 온, 나만의 선물 같은 것은 무엇인가요?",
-      },
-    ],
-  },
-  {
-    typeId: "growth",
-    typeTitle: "성장기의 고민과 발견",
-    questions: [
-      {
-        category: "기억",
-        question: "10대 시절, 가장 많이 고민했던 일은 무엇이었나요?",
-      },
-      {
-        category: "사람",
-        question:
-          "그 시절 나를 이끌어준 친구나 선생님은 누구였나요? 어떤 영향을 받았나요?",
-      },
-      {
-        category: "장소",
-        question:
-          "자주 머물던 학교나 동네의 한 공간이 있다면, 그곳은 어떤 의미였나요?",
-      },
-      {
-        category: "감정",
-        question:
-          "청소년기에 자주 느꼈던 외로움이나 기쁨은 어떤 빛깔이었나요?",
-      },
-      {
-        category: "사건",
-        question: "인생의 방향을 바꿔놓은 결정적인 사건이 있었나요?",
-      },
-      {
-        category: "의미",
-        question:
-          "그 시절의 고민이 지금의 나에게 어떤 의미를 주었나요?",
-      },
-      {
-        category: "배움",
-        question:
-          "그때의 실패나 도전을 통해 배운 교훈이 있다면 무엇인가요?",
-      },
-      {
-        category: "전환",
-        question:
-          "어린 시절의 나에서 청년으로 바뀌었다고 느낀 순간은 언제였나요?",
-      },
-      {
-        category: "가치",
-        question: "10대의 나는 어떤 가치를 중요하게 여겼나요?",
-      },
-      {
-        category: "감사",
-        question:
-          "그 시절의 나에게 “고맙다”고 말하고 싶은 이유는 무엇인가요?",
-      },
-      {
-        category: "관계",
-        question:
-          "그때의 친구 관계가 지금의 인간관계에 어떤 영향을 주었나요?",
-      },
-      {
-        category: "철학",
-        question: "그 시절 나는 ‘꿈’과 ‘현실’을 어떻게 이해했나요?",
-      },
-      {
-        category: "유산",
-        question:
-          "지금까지 남아 있는 10대의 나다운 순수함은 무엇인가요?",
-      },
-    ],
-  },
-] as const;
-
-const BREATH_QUESTIONS: BreathQuestion[] = BREATH_QUESTION_GROUPS.flatMap(
-  (group, groupIndex) =>
-    group.questions.map((item, questionIndex) => ({
+const FALLBACK_QUESTIONS: BreathQuestion[] = DEFAULT_QUESTION_GROUPS.flatMap((group, groupIndex) =>
+  group.questions.flatMap((item, questionIndex) => {
+    const category = CATEGORY_FALLBACKS[item.category];
+    if (!category) return [];
+    return [{
+      id: `fallback-${group.typeId}-${questionIndex + 1}`,
       typeId: group.typeId,
       typeTitle: group.typeTitle,
       typeIndex: groupIndex + 1,
       questionIndex: questionIndex + 1,
       category: item.category,
+      categoryKey: category.key,
+      categoryIcon: category.icon,
+      categoryColor: category.color,
       question: item.question,
-    })),
+      image: null,
+    }];
+  }),
 );
-
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-function getRandomItem<T>(items: T[]) {
-  return items[Math.floor(Math.random() * items.length)];
-}
-
-function formatDuration(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function formatRecordDate(iso: string) {
-  const date = new Date(iso);
-  const weekday = WEEKDAYS[date.getDay()];
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month}월 ${day}일 ${weekday}요일 ${hours}:${minutes}`;
-}
-
-function getDateKey(iso: string) {
-  const date = new Date(iso);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getCategoryProgress(
-  questions: BreathQuestion[],
-  records: VoiceRecord[],
-): CategoryProgress[] {
-  const categorySlots = new Map<
-    string,
-    {
-      category: string;
-      order: number;
-      slots: Array<{
-        keys: string[];
-      }>;
-      color: string;
-    }
-  >();
-  const categoryOrder = new Map<string, number>();
-
-  questions.forEach((question, index) => {
-    if (!categoryOrder.has(question.category)) {
-      categoryOrder.set(question.category, categoryOrder.size);
-    }
-
-    const categoryProgress = categorySlots.get(question.category) ?? {
-      category: question.category,
-      order: index,
-      slots: [],
-      color: getCategoryColor(categoryOrder.get(question.category) ?? 0),
-    };
-
-    categoryProgress.slots.push({
-      keys: getQuestionMatchKeys(question),
-    });
-    categoryProgress.order = Math.min(categoryProgress.order, index);
-    categorySlots.set(question.category, categoryProgress);
-  });
-
-  const completedSlots = new Set(
-    records
-      .filter(
-        (record) =>
-          record.type === "breath" && record.category && record.questionType,
-      )
-      .flatMap(getRecordMatchKeys),
-  );
-
-  const progressItems = Array.from(categorySlots.values())
-    .map((item) => {
-      const completed = item.slots.filter((slot) =>
-        slot.keys.some((key) => completedSlots.has(key)),
-      ).length;
-      return {
-        category: item.category,
-        completed,
-        total: item.slots.length,
-        percent:
-          item.slots.length > 0
-            ? Math.round((completed / item.slots.length) * 100)
-            : 0,
-        color: item.color,
-        order: item.order,
-      };
-    })
-    .sort((left, right) => left.order - right.order);
-
-  return progressItems.map((item) => ({
-    category: item.category,
-    completed: item.completed,
-    total: item.total,
-    percent: item.percent,
-    color: item.color,
-  }));
-}
-
-function getOverallBreathProgress(
-  records: VoiceRecord[],
-  progressItems: CategoryProgress[],
-  breathGoal: number,
-): OverallBreathProgress {
-  const safeGoal = Math.max(1, Math.round(breathGoal || DEFAULT_BREATH_GOAL));
-  const breathRecords = records.filter((record) => record.type === "breath");
-  const colorByCategory = new Map(
-    progressItems.map((item) => [item.category, item.color]),
-  );
-  const categoryOrder = new Map(
-    progressItems.map((item, index) => [item.category, index]),
-  );
-  const counts = new Map<string, number>();
-
-  breathRecords.forEach((record) => {
-    const category = record.category ?? "기타";
-    counts.set(category, (counts.get(category) ?? 0) + 1);
-    if (!colorByCategory.has(category)) {
-      colorByCategory.set(category, getCategoryColor(colorByCategory.size));
-    }
-  });
-
-  const segments = Array.from(counts.entries())
-    .sort(
-      ([leftCategory], [rightCategory]) =>
-        (categoryOrder.get(leftCategory) ?? 999) -
-        (categoryOrder.get(rightCategory) ?? 999),
-    )
-    .reduce<OverallBreathProgress["segments"]>((items, [category, count]) => {
-      const usedCount = items.reduce((total, item) => total + item.count, 0);
-      const remaining = safeGoal - usedCount;
-      if (remaining <= 0) {
-        return items;
-      }
-      return [
-        ...items,
-        {
-          category,
-          count: Math.min(count, remaining),
-          color: colorByCategory.get(category) ?? getCategoryColor(items.length),
-        },
-      ];
-    }, []);
-
-  return {
-    completed: breathRecords.length,
-    goal: safeGoal,
-    percent: Math.min(100, Math.round((breathRecords.length / safeGoal) * 100)),
-    gradient: getOverallProgressGradient(segments, safeGoal),
-    segments,
-  };
-}
-
-function getQuestionMatchKeys(question: BreathQuestion) {
-  return [
-    question.id ? `id:${question.id}` : "",
-    `indexed:${question.typeId}:${question.questionIndex}`,
-    `legacy:${question.typeId}:${question.category}`,
-  ].filter(Boolean);
-}
-
-function getRecordMatchKeys(record: VoiceRecord) {
-  return [
-    record.questionId ? `id:${record.questionId}` : "",
-    record.questionType && record.questionIndex
-      ? `indexed:${record.questionType}:${record.questionIndex}`
-      : "",
-    record.questionType && record.category
-      ? `legacy:${record.questionType}:${record.category}`
-      : "",
-  ].filter(Boolean);
-}
-
-function getCategoryColor(index: number) {
-  return CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-}
-
-function getOverallProgressGradient(
-  segments: OverallBreathProgress["segments"],
-  goal: number,
-) {
-  let cursor = 0;
-  const parts = segments.map((segment) => {
-    const start = (cursor / goal) * 100;
-    cursor += segment.count;
-    const end = (cursor / goal) * 100;
-    return `${segment.color} ${start}% ${end}%`;
-  });
-  const emptyStart = Math.min(100, (cursor / goal) * 100);
-  parts.push(`#e7ddd2 ${emptyStart}% 100%`);
-  return `conic-gradient(${parts.join(", ")})`;
-}
 
 async function apiJson<T>(path: string, init: RequestInit = {}) {
   const response = await fetch(path, {
     credentials: "include",
     ...init,
-    headers:
-      init.body instanceof FormData
-        ? init.headers
-        : {
-            "content-type": "application/json",
-            ...init.headers,
-          },
+    headers: init.body instanceof FormData
+      ? init.headers
+      : { "content-type": "application/json", ...init.headers },
   });
-  const data = (await response.json().catch(() => ({}))) as T & {
-    error?: string;
-  };
-
-  if (!response.ok) {
-    throw new Error(data.error ?? "요청을 처리하지 못했어요.");
-  }
-
+  const data = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error ?? "요청을 처리하지 못했어요.");
   return data as T;
 }
 
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>("splash");
   const [user, setUser] = useState<User | null>(null);
-  const [userName, setUserName] = useState("");
+  const [records, setRecords] = useState<VoiceRecord[]>([]);
+  const [questions, setQuestions] = useState<BreathQuestion[]>(FALLBACK_QUESTIONS);
+  const [dailyPrompt, setDailyPrompt] = useState<DailyPrompt>(FALLBACK_DAILY);
+  const [breathIntroImage, setBreathIntroImage] = useState<ContentImage | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [fontSize, setFontSize] = useState<FontSize>("normal");
+  const [registerMode, setRegisterMode] = useState<"signup" | "login">("signup");
   const [nameInput, setNameInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-  const [records, setRecords] = useState<VoiceRecord[]>([]);
-  const [fontSize, setFontSize] = useState<FontSize>("normal");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [registerMode, setRegisterMode] = useState<"signup" | "login">("signup");
-  const [selectedBreathQuestion, setSelectedBreathQuestion] =
-    useState<BreathQuestion | null>(null);
-  const [breathQuestions, setBreathQuestions] =
-    useState<BreathQuestion[]>(BREATH_QUESTIONS);
-  const [questionChanged, setQuestionChanged] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(5);
-  const [selectedDate, setSelectedDate] = useState("2026-06-23");
-  const [playingRecordId, setPlayingRecordId] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-  const [breathGoal, setBreathGoal] = useState(DEFAULT_BREATH_GOAL);
 
-  const dailyCount = records.filter((record) => record.type === "daily").length;
-  const breathCount = records.filter((record) => record.type === "breath").length;
   const sortedRecords = useMemo(
-    () =>
-      [...records].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
+    () => [...records].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
     [records],
   );
-  const categoryProgress = useMemo(
-    () => getCategoryProgress(breathQuestions, records),
-    [breathQuestions, records],
+  const todayKey = getSeoulDateKey(new Date());
+  const todayRecord = sortedRecords.find(
+    (record) => record.type === "daily" && (record.localDate ?? getSeoulDateKey(record.createdAt)) === todayKey,
   );
-  const overallBreathProgress = useMemo(
-    () => getOverallBreathProgress(records, categoryProgress, breathGoal),
-    [records, categoryProgress, breathGoal],
+  const categories = useMemo(() => getCategories(questions), [questions]);
+  const stage = useMemo(() => getQuestionStage(questions, records), [questions, records]);
+  const selectedQuestion = useMemo(
+    () => stage.questions.find((question) => question.category === selectedCategory) ?? null,
+    [selectedCategory, stage.questions],
   );
 
   useEffect(() => {
-    const storedFontSize = window.localStorage.getItem(FONT_KEY) as FontSize | null;
-
-    if (storedFontSize) {
-      setFontSize(storedFontSize);
-    }
+    const storedFont = window.localStorage.getItem(FONT_KEY) as FontSize | null;
+    if (storedFont) setFontSize(storedFont);
+    const storedCategory = window.localStorage.getItem(CATEGORY_KEY);
+    if (storedCategory) setSelectedCategory(storedCategory);
 
     let active = true;
-    let bootstrapFinished = false;
-    const splashStartedAt = Date.now();
-    const splashFallback = window.setTimeout(() => {
-      if (active && !bootstrapFinished) {
-        setHydrated(true);
-        setScreen("auth");
-      }
-    }, 3200);
-
+    const startedAt = Date.now();
     async function bootstrap() {
-      let nextScreen: Screen = "auth";
+      const [questionResult, contentResult] = await Promise.allSettled([
+        apiJson<{ questions: BreathQuestion[] }>("/api/questions"),
+        apiJson<{ dailyPrompt: DailyPrompt; breathIntroImage: ContentImage | null }>("/api/content"),
+      ]);
+      if (active && questionResult.status === "fulfilled" && questionResult.value.questions.length) {
+        setQuestions(questionResult.value.questions);
+      }
+      if (active && contentResult.status === "fulfilled") {
+        setDailyPrompt(contentResult.value.dailyPrompt ?? FALLBACK_DAILY);
+        setBreathIntroImage(contentResult.value.breathIntroImage);
+      }
+
+      let next: Screen = "auth";
       try {
         const me = await apiJson<{ user: User | null }>("/api/auth/me");
         if (me.user) {
-          setUser(me.user);
-          setUserName(me.user.name);
-          setNameInput(me.user.name);
-          const recordsResponse = await apiJson<{ records: VoiceRecord[] }>(
-            "/api/records",
-          );
-          setRecords(recordsResponse.records);
-          nextScreen = "welcome";
+          const recordResult = await apiJson<{ records: VoiceRecord[] }>("/api/records");
+          if (active) {
+            setUser(me.user);
+            setNameInput(me.user.name);
+            setEmailInput(me.user.email);
+            setRecords(recordResult.records);
+          }
+          const storedScreen = window.localStorage.getItem(LAST_SCREEN_KEY);
+          next = storedScreen === "daily" || storedScreen === "breath" || storedScreen === "breathRecord"
+            ? storedScreen
+            : "home";
         }
       } catch {
-        nextScreen = "auth";
-      } finally {
-        bootstrapFinished = true;
-        window.clearTimeout(splashFallback);
-        const elapsed = Date.now() - splashStartedAt;
-        window.setTimeout(
-          () => {
-            if (active) {
-              setHydrated(true);
-              setScreen(nextScreen);
-            }
-          },
-          Math.max(0, 3000 - elapsed),
-        );
+        next = "auth";
       }
+      const wait = Math.max(0, 3000 - (Date.now() - startedAt));
+      window.setTimeout(() => active && setScreen(next), wait);
     }
-
     bootstrap();
-
-    return () => {
-      active = false;
-      window.clearTimeout(splashFallback);
-    };
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadQuestions() {
-      try {
-        const response = await apiJson<{ questions: BreathQuestion[] }>(
-          "/api/questions",
-        );
-        if (active && response.questions.length > 0) {
-          setBreathQuestions(response.questions);
-          setSelectedBreathQuestion((currentQuestion) => {
-            if (
-              currentQuestion &&
-              response.questions.some(
-                (question) =>
-                  question.id === currentQuestion.id ||
-                  (question.typeId === currentQuestion.typeId &&
-                    question.category === currentQuestion.category &&
-                    question.question === currentQuestion.question),
-              )
-            ) {
-              return currentQuestion;
-            }
-            return null;
-          });
-        }
-      } catch {
-        // 기본 질문지를 그대로 사용한다.
-      }
-    }
-
-    loadQuestions();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    window.localStorage.setItem(FONT_KEY, fontSize);
+  }, [fontSize]);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadSettings() {
-      try {
-        const response = await apiJson<{ breathGoal: number }>("/api/settings");
-        if (active && Number.isFinite(response.breathGoal) && response.breathGoal > 0) {
-          setBreathGoal(Math.round(response.breathGoal));
-        }
-      } catch {
-        setBreathGoal(DEFAULT_BREATH_GOAL);
-      }
-    }
-
-    loadSettings();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    if (selectedCategory) window.localStorage.setItem(CATEGORY_KEY, selectedCategory);
+    else window.localStorage.removeItem(CATEGORY_KEY);
+  }, [selectedCategory]);
 
   useEffect(() => {
-    if (screen !== "welcome") {
-      return;
+    if (!user) return;
+    if (screen === "daily" || screen === "breath" || screen === "breathRecord") {
+      window.localStorage.setItem(LAST_SCREEN_KEY, screen);
+    } else if (screen !== "splash") {
+      window.localStorage.removeItem(LAST_SCREEN_KEY);
     }
+  }, [screen, user]);
 
-    const welcomeTimer = window.setTimeout(() => {
-      setScreen("dailyIntro");
-    }, 2300);
-
-    return () => window.clearTimeout(welcomeTimer);
+  useEffect(() => {
+    if (screen !== "splash") window.scrollTo({ top: 0, left: 0 });
   }, [screen]);
 
   useEffect(() => {
-    if (!hydrated) {
-      return;
+    const selectedStageQuestion = stage.questions.find((question) => question.category === selectedCategory);
+    if (selectedCategory && (!selectedStageQuestion || isQuestionCompleted(selectedStageQuestion, records))) {
+      setSelectedCategory(null);
     }
-    window.localStorage.setItem(FONT_KEY, fontSize);
-  }, [fontSize, hydrated]);
+  }, [records, selectedCategory, stage.questions]);
 
   useEffect(() => {
-    if (screen === "breathIntro") {
-      chooseBreathQuestion(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, breathQuestions]);
+    if (user && screen === "breathRecord" && !selectedQuestion) setScreen("breath");
+  }, [screen, selectedQuestion, user]);
 
-  async function handleNameSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedName = nameInput.trim();
-    const trimmedEmail = emailInput.trim().toLowerCase();
-
-    if (registerMode === "signup" && !trimmedName) {
-      setAuthError("이름을 입력해 주세요.");
-      return;
-    }
-    if (!trimmedEmail || !passwordInput) {
-      setAuthError("이메일과 비밀번호를 입력해 주세요.");
-      return;
-    }
-
+    const name = nameInput.trim();
+    const email = emailInput.trim().toLowerCase();
+    if (registerMode === "signup" && !name) return setAuthError("이름을 입력해 주세요.");
+    if (!email || !passwordInput) return setAuthError("이메일과 비밀번호를 입력해 주세요.");
     setAuthBusy(true);
     setAuthError("");
-
     try {
-      const endpoint =
-        registerMode === "signup" ? "/api/auth/signup" : "/api/auth/login";
-      const response = await apiJson<{ user: User }>(endpoint, {
-        method: "POST",
-        body: JSON.stringify({
-          name: trimmedName,
-          email: trimmedEmail,
-          password: passwordInput,
-        }),
-      });
-
-      setUser(response.user);
-      setUserName(response.user.name);
-      setNameInput(response.user.name);
-      setEmailInput(response.user.email);
+      const result = await apiJson<{ user: User }>(
+        registerMode === "signup" ? "/api/auth/signup" : "/api/auth/login",
+        { method: "POST", body: JSON.stringify({ name, email, password: passwordInput }) },
+      );
+      const recordResult = await apiJson<{ records: VoiceRecord[] }>("/api/records");
+      setUser(result.user);
+      setRecords(recordResult.records);
       setPasswordInput("");
-      const recordsResponse = await apiJson<{ records: VoiceRecord[] }>(
-        "/api/records",
-      );
-      setRecords(recordsResponse.records);
-      setScreen("welcome");
+      setScreen("home");
     } catch (error) {
-      setAuthError(
-        error instanceof Error ? error.message : "로그인을 처리하지 못했어요.",
-      );
+      setAuthError(error instanceof Error ? error.message : "로그인을 처리하지 못했어요.");
     } finally {
       setAuthBusy(false);
     }
   }
 
-  async function handleLogout() {
-    await apiJson<{ ok: boolean }>("/api/auth/logout", {
-      method: "POST",
-      body: JSON.stringify({}),
-    }).catch(() => null);
-    setUser(null);
-    setUserName("");
-    setNameInput("");
-    setEmailInput("");
-    setPasswordInput("");
-    setRecords([]);
-    setDrawerOpen(false);
-    setScreen("auth");
-  }
-
-  async function saveRecord(record: PendingVoiceRecord) {
+  async function saveRecord(pending: PendingRecord) {
     const form = new FormData();
-    form.append("type", record.type);
-    form.append("question", record.question);
-    form.append("questionId", record.questionId ?? "");
-    form.append("questionTypeIndex", String(record.questionTypeIndex ?? ""));
-    form.append("questionIndex", String(record.questionIndex ?? ""));
-    form.append("category", record.category ?? "");
-    form.append("questionType", record.questionType ?? "");
-    form.append("questionTypeTitle", record.questionTypeTitle ?? "");
-    form.append("createdAt", record.createdAt);
-    form.append("durationSeconds", String(record.durationSeconds));
-    form.append(
-      "audio",
-      record.audioBlob,
-      `${record.type}-${Date.now()}.${record.mimeType.includes("mp4") ? "mp4" : "webm"}`,
-    );
-
-    const response = await apiJson<{ record: VoiceRecord }>("/api/records", {
-      method: "POST",
-      body: form,
-    });
-    const savedRecord = response.record;
-    putRecordAtTop(savedRecord);
-    focusRecordDate(savedRecord);
-
-    void apiJson<{ records: VoiceRecord[] }>("/api/records")
-      .then((recordsResponse) => {
-        setRecords(recordsResponse.records);
-        const refreshedRecord =
-          recordsResponse.records.find((recordItem) => recordItem.id === savedRecord.id) ??
-          savedRecord;
-        focusRecordDate(refreshedRecord);
-      })
-      .catch(() => null);
-
-    return savedRecord;
+    form.append("type", pending.type);
+    form.append("question", pending.question);
+    form.append("questionId", pending.questionId ?? "");
+    form.append("questionTypeIndex", String(pending.questionTypeIndex ?? ""));
+    form.append("questionIndex", String(pending.questionIndex ?? ""));
+    form.append("category", pending.category ?? "");
+    form.append("questionType", pending.questionType ?? "");
+    form.append("questionTypeTitle", pending.questionTypeTitle ?? "");
+    form.append("imageId", pending.imageId ?? "");
+    form.append("createdAt", pending.createdAt);
+    form.append("durationSeconds", String(pending.durationSeconds));
+    form.append("audio", pending.audioBlob, `${pending.type}-${Date.now()}.${audioExtension(pending.mimeType)}`);
+    const result = await apiJson<{ record: VoiceRecord }>("/api/records", { method: "POST", body: form });
+    setRecords((current) => [result.record, ...current.filter((record) => record.id !== result.record.id)]);
+    return result.record;
   }
 
   async function deleteRecord(recordId: string) {
-    await apiJson<{ ok: boolean }>(`/api/records/${recordId}`, {
-      method: "DELETE",
-    });
-    setRecords((currentRecords) =>
-      currentRecords.filter((record) => record.id !== recordId),
-    );
-    setPlayingRecordId((currentId) => (currentId === recordId ? null : currentId));
+    await apiJson<{ ok: boolean }>(`/api/records/${recordId}`, { method: "DELETE" });
+    setRecords((current) => current.filter((record) => record.id !== recordId));
   }
 
-  function openWarehouse() {
-    setDrawerOpen(false);
-    setScreen("warehouse");
+  async function logout() {
+    await apiJson("/api/auth/logout", { method: "POST", body: JSON.stringify({}) }).catch(() => null);
+    window.localStorage.removeItem(LAST_SCREEN_KEY);
+    window.localStorage.removeItem(CATEGORY_KEY);
+    setUser(null);
+    setRecords([]);
+    setSelectedCategory(null);
+    setScreen("auth");
   }
 
-  function openSettings() {
-    setDrawerOpen(false);
-    setScreen("settings");
-  }
-
-  function focusRecordDate(record: VoiceRecord) {
-    const recordDate = new Date(record.createdAt);
-    if (recordDate.getFullYear() !== 2026) {
-      return;
-    }
-
-    setSelectedMonth(recordDate.getMonth());
-    setSelectedDate(getDateKey(record.createdAt));
-  }
-
-  function putRecordAtTop(record: VoiceRecord) {
-    setRecords((currentRecords) => [
-      record,
-      ...currentRecords.filter((currentRecord) => currentRecord.id !== record.id),
-    ]);
-  }
-
-  function chooseBreathQuestion(keepCategory: boolean) {
-    if (breathQuestions.length === 0) {
-      setSelectedBreathQuestion(null);
-      return;
-    }
-
-    const recordedQuestionKeys = new Set(
-      records
-        .filter((record) => record.type === "breath" && record.category)
-        .flatMap(getRecordMatchKeys),
-    );
-    const categoryCompletion = new Map<
-      string,
-      {
-        completed: number;
-        total: number;
-      }
-    >();
-
-    breathQuestions.forEach((question) => {
-      const currentProgress = categoryCompletion.get(question.category) ?? {
-        completed: 0,
-        total: 0,
-      };
-      currentProgress.total += 1;
-      if (getQuestionMatchKeys(question).some((key) => recordedQuestionKeys.has(key))) {
-        currentProgress.completed += 1;
-      }
-      categoryCompletion.set(question.category, currentProgress);
-    });
-
-    let category = selectedBreathQuestion?.category;
-
-    if (!keepCategory || !category) {
-      const openCategories = Array.from(categoryCompletion.entries())
-        .filter(([, progress]) => progress.completed < progress.total)
-        .map(([questionCategory]) => questionCategory);
-      category = getRandomItem(
-        openCategories.length > 0
-          ? openCategories
-          : Array.from(new Set(breathQuestions.map((question) => question.category))),
-      );
-    }
-
-    const availableQuestions = breathQuestions.filter(
-      (question) =>
-        question.category === category &&
-        !getQuestionMatchKeys(question).some((key) => recordedQuestionKeys.has(key)) &&
-        (!keepCategory ||
-          !selectedBreathQuestion ||
-          question.typeId !== selectedBreathQuestion.typeId),
-    );
-    const fallbackQuestions = breathQuestions.filter(
-      (question) =>
-        question.category === category &&
-        (!keepCategory ||
-          !selectedBreathQuestion ||
-          question.typeId !== selectedBreathQuestion.typeId),
-    );
-    const selectableQuestions =
-      availableQuestions.length > 0 ? availableQuestions : fallbackQuestions;
-
-    if (selectableQuestions.length === 0) {
-      setSelectedBreathQuestion(null);
-      return;
-    }
-
-    setSelectedBreathQuestion(getRandomItem(selectableQuestions));
-    setQuestionChanged(keepCategory);
-  }
-
-  const appClassName = [
-    styles.app,
-    fontSize === "large" ? styles.largeText : "",
-    fontSize === "xlarge" ? styles.xlargeText : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const showAppChrome =
-    screen !== "auth" && screen !== "register" && screen !== "welcome";
-
-  if (screen === "splash") {
-    return <SplashScreen />;
-  }
+  const appClass = [styles.app, styles[`${fontSize}Text`]].filter(Boolean).join(" ");
+  if (screen === "splash") return <SplashScreen />;
+  if (screen === "auth") return <AuthScreen onSignup={() => { setRegisterMode("signup"); setScreen("register"); }} onLogin={() => { setRegisterMode("login"); setScreen("register"); }} />;
+  if (screen === "register") return <RegisterScreen mode={registerMode} name={nameInput} email={emailInput} password={passwordInput} busy={authBusy} error={authError} onName={setNameInput} onEmail={setEmailInput} onPassword={setPasswordInput} onSubmit={handleAuth} onBack={() => setScreen("auth")} />;
 
   return (
-    <main className={appClassName}>
-      {showAppChrome && (
-        <TopBar
-          title={getScreenTitle(screen)}
-          onMenu={() => setDrawerOpen(true)}
-          onHome={() => setScreen("dailyIntro")}
-        />
-      )}
-
-      {screen === "auth" && (
-        <AuthScreen
-          onSignup={() => {
-            setRegisterMode("signup");
-            setScreen("register");
-          }}
-          onLogin={() => {
-            setRegisterMode("login");
-            setScreen("register");
-          }}
-        />
-      )}
-
-      {screen === "register" && (
-        <RegisterScreen
-          mode={registerMode}
-          nameInput={nameInput}
-          setNameInput={setNameInput}
-          emailInput={emailInput}
-          setEmailInput={setEmailInput}
-          passwordInput={passwordInput}
-          setPasswordInput={setPasswordInput}
-          authError={authError}
-          authBusy={authBusy}
-          onSubmit={handleNameSubmit}
-          onBack={() => setScreen("auth")}
-        />
-      )}
-
-      {screen === "welcome" && <WelcomeScreen userName={userName} />}
-
-      {screen === "dailyIntro" && (
-        <DailyIntroScreen
-          onDailyRecord={() => setScreen("dailyRecord")}
-          onBreathRecord={() => setScreen("breathIntro")}
-        />
-      )}
-
-      {screen === "dailyRecord" && (
-        <RecordingScreen
-          title="일상 기록"
-          eyebrow="일상 기록"
-          question={DAILY_QUESTION}
-          recordType="daily"
+    <main className={appClass}>
+      {screen === "home" && <HomeScreen userName={user?.name ?? "사용자"} todayComplete={Boolean(todayRecord)} onToday={() => setScreen("daily")} onArchive={() => setScreen("archive")} onSettings={() => setScreen("settings")} />}
+      {screen === "daily" && (
+        <DailyStoryScreen
+          prompt={dailyPrompt}
+          existingRecord={todayRecord}
           onSave={saveRecord}
-          onComplete={() => setScreen("breathIntro")}
-          onBack={() => setScreen("dailyIntro")}
+          onNavigate={setScreen}
         />
       )}
-
-      {screen === "breathIntro" && selectedBreathQuestion && (
-        <BreathIntroScreen
-          question={selectedBreathQuestion}
-          questionChanged={questionChanged}
-          onChangeQuestion={() => chooseBreathQuestion(true)}
-          onRest={() => setScreen("dailyIntro")}
-          onReady={() => setScreen("breathRecord")}
+      {screen === "breath" && (
+        <BreathSelectionScreen
+          categories={categories}
+          questions={stage.questions}
+          selectedCategory={selectedCategory}
+          typeIndex={stage.typeIndex}
+          introImage={breathIntroImage}
+          records={records}
+          allCompleted={stage.allCompleted}
+          onSelect={setSelectedCategory}
+          onReady={() => selectedQuestion && setScreen("breathRecord")}
+          onComplete={() => { setSelectedCategory(null); setScreen("home"); }}
+          onNavigate={setScreen}
         />
       )}
-
-      {screen === "breathRecord" && selectedBreathQuestion && (
-        <RecordingScreen
-          title="숨결 기록"
-          eyebrow={selectedBreathQuestion.category}
-          question={selectedBreathQuestion.question}
-          questionId={selectedBreathQuestion.id}
-          questionTypeIndex={selectedBreathQuestion.typeIndex}
-          questionIndex={selectedBreathQuestion.questionIndex}
-          questionType={selectedBreathQuestion.typeId}
-          questionTypeTitle={selectedBreathQuestion.typeTitle}
-          category={selectedBreathQuestion.category}
-          recordType="breath"
+      {screen === "breathRecord" && selectedQuestion && (
+        <BreathRecorderScreen
+          question={selectedQuestion}
           onSave={saveRecord}
-          onComplete={() => {
-            chooseBreathQuestion(false);
-            setScreen("breathIntro");
-          }}
-          onBack={() => setScreen("breathIntro")}
+          onNext={() => { setSelectedCategory(null); setScreen("breath"); }}
+          onNavigate={setScreen}
         />
       )}
-
-      {screen === "warehouse" && (
-        <WarehouseScreen
-          records={sortedRecords}
-          categoryProgress={categoryProgress}
-          overallBreathProgress={overallBreathProgress}
-          selectedDate={selectedDate}
-          selectedMonth={selectedMonth}
-          playingRecordId={playingRecordId}
-          onMonthChange={setSelectedMonth}
-          onDateSelect={setSelectedDate}
-          onPlayToggle={setPlayingRecordId}
-          onDelete={deleteRecord}
-        />
-      )}
-
-      {screen === "settings" && (
-        <SettingsScreen
-          fontSize={fontSize}
-          onFontSizeChange={setFontSize}
-          onLogout={handleLogout}
-        />
-      )}
-
-      {showAppChrome && (
-        <>
-          <NavigationBar
-            currentScreen={screen}
-            onDaily={() => setScreen("dailyIntro")}
-            onBreath={() => setScreen("breathIntro")}
-            onWarehouse={openWarehouse}
-            onSettings={openSettings}
-          />
-
-          {drawerOpen && (
-            <Drawer
-              open={drawerOpen}
-              userName={userName}
-              dailyCount={dailyCount}
-              breathCount={breathCount}
-              breathGoal={breathGoal}
-              records={sortedRecords}
-              playingRecordId={playingRecordId}
-              onClose={() => setDrawerOpen(false)}
-              onWarehouse={openWarehouse}
-              onSettings={openSettings}
-              onPlayToggle={setPlayingRecordId}
-              onDelete={deleteRecord}
-            />
-          )}
-        </>
-      )}
+      {screen === "archive" && <ArchiveScreen userName={user?.name ?? "사용자"} records={sortedRecords.slice(0, 3)} onDelete={deleteRecord} onNavigate={setScreen} />}
+      {screen === "settings" && <SettingsScreen fontSize={fontSize} onFontSize={setFontSize} onLogout={logout} onBack={() => setScreen("home")} />}
+      {screen === "home" && <BottomNavigation current="home" onNavigate={setScreen} />}
     </main>
   );
 }
@@ -1062,967 +372,505 @@ export default function HomePage() {
 function SplashScreen() {
   return (
     <main className={styles.splash}>
-      <div className={styles.splashMark} aria-hidden="true">
-        <Mic size={32} />
+      <img src="/images/splash-watercolor.webp" alt="햇살이 비추는 들길" />
+      <div className={styles.splashCopy}>
+        <Leaf aria-hidden="true" />
+        <h1>숨결</h1>
+        <strong>- 시절이야기 -</strong>
+        <p>삶과 목소리를 천천히 남기는 시간</p>
       </div>
-      <h1>숨결의 기록</h1>
-      <p>삶과 목소리를 천천히 남기는 시간</p>
+      <div className={styles.loadingBlock}>
+        <span><i /></span>
+        <p>따뜻한 이야기를 준비하고 있어요...</p>
+      </div>
     </main>
   );
 }
 
-function AuthScreen({
-  onSignup,
-  onLogin,
-}: {
-  onSignup: () => void;
-  onLogin: () => void;
-}) {
+function AuthScreen({ onSignup, onLogin }: { onSignup: () => void; onLogin: () => void }) {
   return (
-    <section className={`${styles.screen} ${styles.centerScreen}`}>
-      <div className={styles.brandBlock}>
-        <span className={styles.brandIcon}>
-          <Mic size={28} />
-        </span>
-        <p>숨결의 기록</p>
+    <main className={styles.authPage}>
+      <div className={styles.authBrand}><Leaf /><span>숨결</span><small>시절이야기</small></div>
+      <div className={styles.authCopy}><h1>로그인이 되어있지 않아요</h1><p>당신의 이야기를 안전하게 보관하려면 먼저 시작해 주세요.</p></div>
+      <div className={styles.authActions}>
+        <button className={styles.primaryButton} onClick={onSignup}>간단 회원가입 이후 시작하기</button>
+        <button className={styles.outlineButton} onClick={onLogin}>아이디가 있다면 로그인하기</button>
       </div>
-      <div className={styles.copyStack}>
-        <h1>로그인이 되어있지 않아요</h1>
-        <p>이름만 남기고 오늘의 목소리를 천천히 시작해 보세요.</p>
-      </div>
-      <div className={styles.actionStack}>
-        <button className={styles.primaryButton} onClick={onSignup}>
-          <UserRound size={19} />
-          간단 회원가입 이후 시작하기
-        </button>
-        <button className={styles.secondaryButton} onClick={onLogin}>
-          <LogIn size={19} />
-          아이디가 있다면 로그인 하기
-        </button>
-      </div>
-    </section>
+    </main>
   );
 }
 
-function RegisterScreen({
-  mode,
-  nameInput,
-  setNameInput,
-  emailInput,
-  setEmailInput,
-  passwordInput,
-  setPasswordInput,
-  authError,
-  authBusy,
-  onSubmit,
-  onBack,
-}: {
-  mode: "signup" | "login";
-  nameInput: string;
-  setNameInput: (value: string) => void;
-  emailInput: string;
-  setEmailInput: (value: string) => void;
-  passwordInput: string;
-  setPasswordInput: (value: string) => void;
-  authError: string;
-  authBusy: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onBack: () => void;
+function RegisterScreen(props: {
+  mode: "signup" | "login"; name: string; email: string; password: string; busy: boolean; error: string;
+  onName: (value: string) => void; onEmail: (value: string) => void; onPassword: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void; onBack: () => void;
 }) {
-  const isSignup = mode === "signup";
-
   return (
-    <section className={styles.screen}>
-      <form className={styles.formScreen} onSubmit={onSubmit}>
-        <div className={styles.copyStack}>
-          <h1>{isSignup ? "이름을 알려주세요" : "다시 만나 반가워요"}</h1>
-          <p>
-            {isSignup
-              ? "다음부터는 이 이름으로 반갑게 맞이할게요."
-              : "가입한 이메일과 비밀번호로 이어서 기록해요."}
-          </p>
-        </div>
-
-        {isSignup && (
-          <>
-            <label className={styles.inputLabel} htmlFor="user-name">
-              사용자 이름
-            </label>
-            <input
-              id="user-name"
-              className={styles.nameInput}
-              value={nameInput}
-              onChange={(event) => setNameInput(event.target.value)}
-              placeholder="홍길동"
-              autoComplete="name"
-              autoFocus
-            />
-          </>
-        )}
-
-        <label className={styles.inputLabel} htmlFor="user-email">
-          이메일 아이디
-        </label>
-        <input
-          id="user-email"
-          className={styles.nameInput}
-          value={emailInput}
-          onChange={(event) => setEmailInput(event.target.value)}
-          placeholder="name@example.com"
-          autoComplete="email"
-          inputMode="email"
-          autoFocus={!isSignup}
-        />
-
-        <label className={styles.inputLabel} htmlFor="user-password">
-          비밀번호
-        </label>
-        <input
-          id="user-password"
-          className={styles.nameInput}
-          value={passwordInput}
-          onChange={(event) => setPasswordInput(event.target.value)}
-          placeholder="8자 이상 입력"
-          autoComplete={isSignup ? "new-password" : "current-password"}
-          type="password"
-        />
-
-        {authError && <p className={styles.errorText}>{authError}</p>}
-
-        <button className={styles.primaryButton} type="submit" disabled={authBusy}>
-          <Check size={19} />
-          {authBusy
-            ? "처리 중"
-            : isSignup
-              ? "회원가입하고 시작하기"
-              : "로그인하기"}
-        </button>
-        <button className={styles.textButton} type="button" onClick={onBack}>
-          이전으로
-        </button>
+    <main className={styles.authPage}>
+      <button className={styles.backIcon} onClick={props.onBack} aria-label="이전 화면"><ArrowLeft /></button>
+      <form className={styles.registerForm} onSubmit={props.onSubmit}>
+        <div><h1>{props.mode === "signup" ? "이름을 알려주세요" : "다시 만나 반가워요"}</h1><p>{props.mode === "signup" ? "다음부터는 이 이름으로 반갑게 맞이할게요." : "가입한 이메일과 비밀번호로 이어서 기록해요."}</p></div>
+        {props.mode === "signup" && <label>사용자 이름<input value={props.name} onChange={(event) => props.onName(event.target.value)} autoComplete="name" placeholder="홍길동" /></label>}
+        <label>이메일 아이디<input value={props.email} onChange={(event) => props.onEmail(event.target.value)} autoComplete="email" inputMode="email" placeholder="name@example.com" /></label>
+        <label>비밀번호<input type="password" value={props.password} onChange={(event) => props.onPassword(event.target.value)} autoComplete={props.mode === "signup" ? "new-password" : "current-password"} placeholder="8자 이상 입력" /></label>
+        {props.error && <p className={styles.errorText}>{props.error}</p>}
+        <button className={styles.primaryButton} disabled={props.busy}>{props.busy ? "처리 중" : props.mode === "signup" ? "회원가입하고 시작하기" : "로그인하기"}</button>
       </form>
-    </section>
+    </main>
   );
 }
 
-function WelcomeScreen({ userName }: { userName: string }) {
+function HomeScreen({ userName, todayComplete, onToday, onArchive, onSettings }: { userName: string; todayComplete: boolean; onToday: () => void; onArchive: () => void; onSettings: () => void }) {
   return (
-    <section className={`${styles.screen} ${styles.centerScreen}`}>
-      <div className={styles.welcomeCircle}>
-        <Mic size={36} />
+    <section className={styles.homeScreen}>
+      <button className={styles.settingsButton} onClick={onSettings} aria-label="설정"><Settings /></button>
+      <div className={styles.homeHero}>
+        <div className={styles.homeWelcome}><h1><span>{userName}님</span>환영합니다</h1><p>오늘도 당신의 소중한 이야기를 기록해 보세요.</p></div>
+        <img src="/images/home-chair.webp" alt="햇살 아래 편안한 의자와 화분" />
       </div>
-      <div className={styles.copyStack}>
-        <h1>{userName}님, 환영합니다.</h1>
-        <p>
-          목소리는 오늘을 기억하는 가장 따뜻한 방법입니다.
-          <br />
-          오늘도 서두르지 않고
-          <br />
-          천천히 시작해 볼까요?
-        </p>
+      <button className={styles.todayCard} onClick={todayComplete ? onArchive : onToday}>
+        <img src="/images/today-notebook.webp" alt="차와 노트가 놓인 탁자" />
+        <span><strong>{todayComplete ? "오늘 이야기 완료" : "오늘 이야기"}</strong><small>{todayComplete ? "이야기창고에서 다시 들어보세요." : "지금의 나와 하루를 기록해 보세요."}</small></span>
+        <i><ArrowRight /></i>
+      </button>
+      <div className={styles.homeMessage}>
+        <span><Leaf /></span>
+        <strong>하루에 하나, 당신의 이야기를 들려주세요.</strong>
+        <p>작은 기억이 모여, 당신의 삶이 됩니다.</p>
+        <hr />
+        <em>당신의 목소리는 누군가에게 큰 힘이 될 수 있어요.<br />천천히, 당신의 속도로 기록해 보세요.</em>
       </div>
     </section>
   );
 }
 
-function DailyIntroScreen({
-  onDailyRecord,
-  onBreathRecord,
-}: {
-  onDailyRecord: () => void;
-  onBreathRecord: () => void;
+function DailyStoryScreen({ prompt, existingRecord, onSave, onNavigate }: { prompt: DailyPrompt; existingRecord?: VoiceRecord; onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNavigate: (screen: Screen) => void }) {
+  if (!prompt.isActive) {
+    return (
+      <section className={styles.storyScreen}>
+        <ScreenHeader title="오늘이야기" />
+        <div className={styles.completedToday}><Leaf /><h1>오늘이야기는 잠시 쉬어가요</h1><p>숨결이야기에서 마음에 머무는 질문을 만나보세요.</p><button className={styles.primaryButton} onClick={() => onNavigate("breath")}>숨결이야기로 이동하기</button></div>
+        <BottomNavigation current="daily" onNavigate={onNavigate} />
+      </section>
+    );
+  }
+  if (existingRecord) {
+    return (
+      <section className={styles.storyScreen}>
+        <ScreenHeader title="오늘이야기" />
+        <div className={styles.completedToday}><Check /><h1>오늘 이야기를 이미 기록했어요</h1><p>오늘 남긴 목소리는 이야기창고에서 다시 들을 수 있어요.</p><button className={styles.primaryButton} onClick={() => onNavigate("archive")}>이야기창고에서 듣기</button></div>
+        <BottomNavigation current="daily" onNavigate={onNavigate} />
+      </section>
+    );
+  }
+  return (
+    <RecorderExperience
+      variant="daily"
+      title="오늘이야기"
+      eyebrow="오늘의 질문"
+      question={prompt.question}
+      helper={prompt.helperText}
+      imageUrl={prompt.image?.imageUrl ?? "/seed-images/daily-default.webp"}
+      imageAlt={prompt.image?.description || "햇살이 비추는 초록 들길"}
+      recordMeta={{ type: "daily", question: prompt.question, questionId: prompt.id, imageId: prompt.image?.id }}
+      onSave={onSave}
+      onNavigate={onNavigate}
+      primaryAction="saveDaily"
+    />
+  );
+}
+
+function BreathSelectionScreen(props: {
+  categories: CategoryView[]; questions: BreathQuestion[]; selectedCategory: string | null; typeIndex: number | null;
+  introImage: ContentImage | null; records: VoiceRecord[]; allCompleted: boolean;
+  onSelect: (category: string) => void; onReady: () => void; onComplete: () => void; onNavigate: (screen: Screen) => void;
 }) {
+  const selected = props.questions.find((question) => question.category === props.selectedCategory) ?? null;
   return (
-    <section className={styles.screen}>
-      <ScreenLabel title="일상 기록" tone="blue" />
-      <div className={styles.questionPanel}>
-        <span className={styles.kicker}>일상 질문</span>
-        <h1>오늘 하루에 대해서 말씀해 주시겠어요?</h1>
-        <p>있었던 일이나, 현재 기분 등 어떤 것이든 편하게 들려주세요.</p>
+    <section className={styles.selectionScreen}>
+      <ScreenHeader title="숨결이야기" />
+      <p className={styles.screenIntro}>카테고리를 선택하면 그에 맞는 질문을 만날 수 있어요.</p>
+      <div className={styles.categoryGrid}>
+        {props.categories.map((category) => {
+          const question = props.questions.find((item) => item.category === category.name);
+          const complete = question ? isQuestionCompleted(question, props.records) : true;
+          return (
+            <button key={category.name} className={`${styles.categoryButton} ${props.selectedCategory === category.name ? styles.categorySelected : ""}`} style={{ "--category": category.color } as CSSProperties} disabled={complete} onClick={() => props.onSelect(category.name)}>
+              <CategoryIcon name={category.icon} />
+              <span>{category.name}</span>
+              {complete && <Check className={styles.categoryCheck} />}
+            </button>
+          );
+        })}
       </div>
-      <div className={styles.actionStack}>
-        <button className={styles.primaryButton} onClick={onDailyRecord}>
-          <Mic size={19} />
-          네, 일상 기록을 남길래요
-        </button>
-        <button className={styles.secondaryButton} onClick={onBreathRecord}>
-          <ChevronRight size={19} />
-          아니요. 숨결기록으로 넘어갈게요
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function BreathIntroScreen({
-  question,
-  questionChanged,
-  onChangeQuestion,
-  onRest,
-  onReady,
-}: {
-  question: BreathQuestion;
-  questionChanged: boolean;
-  onChangeQuestion: () => void;
-  onRest: () => void;
-  onReady: () => void;
-}) {
-  return (
-    <section className={styles.screen}>
-      <ScreenLabel title="숨결 기록" tone="sage" />
-      <div className={styles.questionPanel}>
-        <div className={styles.questionMeta}>
-          <span>유형 {question.typeIndex}</span>
-          <span>질문 {question.questionIndex}</span>
-          <span>{question.category}</span>
-          <span>{question.typeTitle}</span>
+      <article className={`${styles.selectionCard} ${selected ? styles.questionSelected : ""}`} style={{ backgroundImage: `linear-gradient(to bottom, rgba(255,250,245,.04), rgba(255,250,245,.2)), url(${selected ? questionImageUrl(selected) : props.introImage?.imageUrl ?? "/seed-images/breath-intro.webp"})` }}>
+        <div className={styles.selectionCopy}>
+          <span><Leaf /> {props.typeIndex ? `질문유형 ${props.typeIndex}` : "오늘의 질문"} <Leaf /></span>
+          <h1>{selected ? selected.question : "오늘은 어떤 숨결이야기를 하고 싶으신가요?"}</h1>
+          <p>{selected ? "당신의 기억과 감정을 자유롭게 이야기해 주세요." : "4개의 카테고리 중에서 선택해 주세요."}</p>
         </div>
-        <h1>{question.question}</h1>
-      </div>
-      <div className={styles.actionStack}>
-        <button className={styles.primaryButton} onClick={onReady}>
-          <Mic size={19} />이 질문으로 녹음 준비
-        </button>
-        {!questionChanged ? (
-          <button className={styles.secondaryButton} onClick={onChangeQuestion}>
-            <RotateCcw size={19} />이 질문은 건너뛸게요
-          </button>
-        ) : (
-          <button className={styles.secondaryButton} onClick={onRest}>
-            <PauseCircle size={19} />
-            오늘은 쉬어갈게요
-          </button>
-        )}
-      </div>
+        {selected && <button className={styles.cardAction} onClick={props.onReady}><Leaf />이 질문으로 할게요<ChevronRight /></button>}
+      </article>
+      <BottomNavigation current="breath" onNavigate={props.onNavigate} />
+      {props.allCompleted && <ConfirmModal title="모든 이야기를 들려주셨어요" description="당신이 들려준 목소리를 소중히 간직할게요." actions={<button className={styles.primaryButton} onClick={props.onComplete}>완료</button>} />}
     </section>
   );
 }
 
-function RecordingScreen({
-  title,
-  eyebrow,
-  question,
-  recordType,
-  questionId,
-  questionTypeIndex,
-  questionIndex,
-  category,
-  questionType,
-  questionTypeTitle,
-  onSave,
-  onComplete,
-  onBack,
-}: {
-  title: string;
-  eyebrow: string;
-  question: string;
-  recordType: RecordType;
-  questionId?: string;
-  questionTypeIndex?: number;
-  questionIndex?: number;
-  category?: string;
-  questionType?: string;
-  questionTypeTitle?: string;
-  onSave: (record: PendingVoiceRecord) => Promise<VoiceRecord>;
-  onComplete: () => void;
-  onBack: () => void;
+function BreathRecorderScreen({ question, onSave, onNext, onNavigate }: { question: BreathQuestion; onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNext: () => void; onNavigate: (screen: Screen) => void }) {
+  return (
+    <RecorderExperience
+      variant="breath"
+      title="숨결이야기"
+      eyebrow="오늘의 질문"
+      question={question.question}
+      helper="당신의 기억과 감정을 자유롭게 이야기해 주세요."
+      imageUrl={questionImageUrl(question)}
+      imageAlt={question.image?.description || `${question.category} 질문을 위한 수채화 풍경`}
+      recordMeta={{ type: "breath", question: question.question, questionId: question.id, questionTypeIndex: question.typeIndex, questionIndex: question.questionIndex, category: question.category, questionType: question.typeId, questionTypeTitle: question.typeTitle, imageId: question.image?.id }}
+      onSave={onSave}
+      onNavigate={onNavigate}
+      onNext={onNext}
+      primaryAction="nextQuestion"
+    />
+  );
+}
+
+function RecorderExperience(props: {
+  variant: "daily" | "breath"; title: string; eyebrow: string; question: string; helper: string; imageUrl: string; imageAlt: string;
+  recordMeta: Omit<PendingRecord, "createdAt" | "durationSeconds" | "audioBlob" | "mimeType">;
+  onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNavigate: (screen: Screen) => void;
+  onNext?: () => void; primaryAction: "saveDaily" | "nextQuestion";
 }) {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [durationSeconds, setDurationSeconds] = useState(0);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [savedRecordId, setSavedRecordId] = useState<string | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const startedAtRef = useRef<string>("");
-  const durationRef = useRef(0);
+  const recorder = useAudioRecorder();
+  const [pendingMove, setPendingMove] = useState<{ target: Screen | "next"; saveLabel: string; discardLabel: string } | null>(null);
+  const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [abandonOpen, setAbandonOpen] = useState(false);
+
+  const buildRecord = useCallback((blob: Blob): PendingRecord => ({
+    ...props.recordMeta,
+    createdAt: recorder.createdAt || new Date().toISOString(),
+    durationSeconds: Math.max(1, recorder.elapsed),
+    audioBlob: blob,
+    mimeType: blob.type || recorder.mimeType || "audio/webm",
+  }), [props.recordMeta, recorder.createdAt, recorder.elapsed, recorder.mimeType]);
+
+  const moveNow = useCallback((target: Screen | "next") => {
+    recorder.discard();
+    setPendingMove(null);
+    setPendingBlob(null);
+    setSaveError("");
+    if (target === "next") props.onNext?.();
+    else props.onNavigate(target);
+  }, [props, recorder]);
+
+  async function requestMove(target: Screen | "next", saveLabel: string, discardLabel: string) {
+    const blob = recorder.recording ? await recorder.stop() : recorder.blob;
+    if (!blob) return moveNow(target);
+    setPendingBlob(blob);
+    setPendingMove({ target, saveLabel, discardLabel });
+    setSaveError("");
+  }
+
+  async function saveAndMove() {
+    if (!pendingMove || !pendingBlob) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await props.onSave(buildRecord(pendingBlob));
+      moveNow(pendingMove.target);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "녹음을 저장하지 못했어요.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveDailyNow() {
+    const blob = recorder.recording ? await recorder.stop() : recorder.blob;
+    if (!blob) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await props.onSave(buildRecord(blob));
+      recorder.discard();
+      props.onNavigate("home");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "녹음을 저장하지 못했어요.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-      }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!recorder.recording && !recorder.blob) return;
+      event.preventDefault();
+      event.returnValue = "";
     };
-  }, []);
-
-  async function startRecording() {
-    setErrorMessage("");
-    setSavedRecordId(null);
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setErrorMessage("이 브라우저에서는 녹음을 사용할 수 없어요.");
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const recorder = new MediaRecorder(stream);
-      chunksRef.current = [];
-      startedAtRef.current = new Date().toISOString();
-      durationRef.current = 0;
-      setDurationSeconds(0);
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        if (timerRef.current) {
-          window.clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-        stream.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        setIsSaving(true);
-        try {
-          const savedRecord = await onSave({
-            type: recordType,
-            question,
-            questionId,
-            questionTypeIndex,
-            questionIndex,
-            category,
-            questionType,
-            questionTypeTitle,
-            createdAt: startedAtRef.current || new Date().toISOString(),
-            durationSeconds: Math.max(1, durationRef.current),
-            audioBlob: blob,
-            mimeType: blob.type || "audio/webm",
-          });
-          setSavedRecordId(savedRecord.id);
-        } catch (error) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "기록을 저장하지 못했어요. 다시 시도해 주세요.",
-          );
-        } finally {
-          setIsSaving(false);
-        }
-        setIsRecording(false);
-      };
-
-      recorderRef.current = recorder;
-      recorder.start();
-      setIsRecording(true);
-      timerRef.current = window.setInterval(() => {
-        setDurationSeconds((currentSeconds) => {
-          const nextSeconds = currentSeconds + 1;
-          durationRef.current = nextSeconds;
-          return nextSeconds;
-        });
-      }, 1000);
-    } catch {
-      setErrorMessage("마이크 권한을 확인한 뒤 다시 시도해 주세요.");
-    }
-  }
-
-  function stopRecording() {
-    if (recorderRef.current && recorderRef.current.state !== "inactive") {
-      recorderRef.current.stop();
-    }
-  }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [recorder.blob, recorder.recording]);
 
   return (
-    <section className={styles.screen}>
-      <button className={styles.backButton} onClick={onBack}>
-        <ArrowLeft size={18} />
-        이전
-      </button>
-      <ScreenLabel title={title} tone={recordType === "daily" ? "blue" : "sage"} />
-      <div className={styles.questionPanel}>
-        <div className={styles.questionMeta}>
-          <span>{eyebrow}</span>
-          {questionTypeTitle && <span>{questionTypeTitle}</span>}
-        </div>
-        <h1>{question}</h1>
-      </div>
-
-      <div className={styles.recorderPanel}>
-        <button
-          className={`${styles.recordButton} ${isRecording ? styles.recording : ""}`}
-          onClick={isRecording ? stopRecording : startRecording}
-          disabled={isSaving}
-          aria-label={isRecording ? "녹음 중지" : "녹음 시작"}
-        >
-          {isRecording ? <PauseCircle size={42} /> : <Mic size={42} />}
+    <section className={`${styles.recorderScreen} ${props.variant === "daily" ? styles.dailyRecorder : ""}`}>
+      <ScreenHeader title={props.title} onBack={() => requestMove(props.variant === "daily" ? "home" : "breath", "저장하고 이동하기", "저장하지 않고 이동하기")} />
+      <div className={styles.recordQuestion}><span><Leaf /> {props.eyebrow} <Leaf /></span><h1>{props.question}</h1><p>{props.helper}</p></div>
+      <div className={styles.recorderVisual} style={props.variant === "daily" ? { backgroundImage: `url(${props.imageUrl})` } : undefined}>
+        {props.variant === "breath" && <img src={props.imageUrl} alt={props.imageAlt} />}
+        <div className={styles.waveform} aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <i key={index} />)}</div>
+        <button className={`${styles.recordButton} ${recorder.recording ? styles.recording : ""}`} onClick={recorder.recording ? () => recorder.stop() : recorder.start} disabled={saving} aria-label={recorder.recording ? "녹음 중지" : "녹음 시작"}>
+          {recorder.recording ? <Pause /> : <Mic />}
         </button>
-        <div className={styles.timerLine}>
-          <span className={isRecording ? styles.liveDot : styles.readyDot} />
-          <strong>
-            {isRecording
-              ? "녹음 중"
-              : isSaving
-                ? "저장 중"
-                : savedRecordId
-                  ? "저장 완료"
-                  : "녹음 준비"}
-          </strong>
-          <span>{formatDuration(durationSeconds)}</span>
-        </div>
+        <strong className={styles.timer}>{formatDuration(recorder.elapsed)}</strong>
+        {recorder.recording && <span className={styles.recordingLabel}>● 녹음 중</span>}
       </div>
-
-      {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
-
-      {savedRecordId && (
-        <div className={styles.actionStack}>
-          <button className={styles.primaryButton} onClick={onComplete}>
-            <Check size={19} />
-            기록 저장 완료
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function WarehouseScreen({
-  records,
-  categoryProgress,
-  overallBreathProgress,
-  selectedDate,
-  selectedMonth,
-  playingRecordId,
-  onMonthChange,
-  onDateSelect,
-  onPlayToggle,
-  onDelete,
-}: {
-  records: VoiceRecord[];
-  categoryProgress: CategoryProgress[];
-  overallBreathProgress: OverallBreathProgress;
-  selectedDate: string;
-  selectedMonth: number;
-  playingRecordId: string | null;
-  onMonthChange: (month: number) => void;
-  onDateSelect: (date: string) => void;
-  onPlayToggle: (recordId: string | null) => void;
-  onDelete: (recordId: string) => void;
-}) {
-  const [viewMode, setViewMode] = useState<"calendar" | "recent">("calendar");
-  const recordsByDate = useMemo(() => {
-    return records.reduce<Record<string, VoiceRecord[]>>((acc, record) => {
-      const key = getDateKey(record.createdAt);
-      acc[key] = [...(acc[key] ?? []), record];
-      return acc;
-    }, {});
-  }, [records]);
-  const selectedRecords = recordsByDate[selectedDate] ?? [];
-
-  return (
-    <section className={styles.screen}>
-      <div className={styles.sectionHeader}>
-        <ScreenLabel title="숨결창고" tone="sage" />
-        <div className={styles.segmented} role="tablist" aria-label="숨결창고 보기">
-          <button
-            className={viewMode === "calendar" ? styles.activeSegment : ""}
-            onClick={() => setViewMode("calendar")}
-          >
-            <CalendarDays size={16} />
-            달력
-          </button>
-          <button
-            className={viewMode === "recent" ? styles.activeSegment : ""}
-            onClick={() => setViewMode("recent")}
-          >
-            <Clock3 size={16} />
-            최근
-          </button>
-        </div>
+      <div className={styles.recordTip}><Lightbulb /><p>천천히, 편안하게 이야기해 주세요.<br />다시 들어보고 수정할 수 있어요.</p></div>
+      {recorder.error && <p className={styles.errorText}>{recorder.error}</p>}
+      {saveError && !pendingMove && <div className={styles.inlineError}><p>{saveError}</p><button onClick={saveDailyNow}><RotateCcw />재시도</button></div>}
+      <div className={styles.recorderActions}>
+        {props.variant === "daily" ? (
+          <>
+            {recorder.blob && <button className={styles.primaryButton} onClick={saveDailyNow} disabled={saving}>{saving ? "저장 중" : "오늘이야기 저장하기"}</button>}
+            <button className={styles.skipButton} onClick={() => requestMove("breath", "저장하고 숨결이야기로", "저장하지 않고 넘어가기")}>건너뛰고 숨결이야기로 넘어갈게요<ArrowRight /></button>
+          </>
+        ) : (
+          <>
+            <button className={styles.endButton} onClick={() => requestMove("home", "저장하고 홈으로", "저장하지 않고 종료하기")}><Leaf />오늘은 종료할게요</button>
+            <button className={styles.primaryButton} onClick={() => requestMove("next", "저장하고 다음 질문으로", "저장하지 않고 넘어가기")}>다음 질문으로 넘어가기<ArrowRight /></button>
+          </>
+        )}
       </div>
-
-      <OverallProgressPanel progress={overallBreathProgress} />
-      <CategoryProgressPanel progressItems={categoryProgress} />
-
-      {viewMode === "calendar" ? (
-        <>
-          <Calendar2026
-            month={selectedMonth}
-            selectedDate={selectedDate}
-            recordsByDate={recordsByDate}
-            onMonthChange={onMonthChange}
-            onDateSelect={onDateSelect}
-          />
-          <RecordList
-            title="선택한 날짜의 기록"
-            records={selectedRecords}
-            emptyText="이 날짜에는 아직 남긴 목소리가 없어요."
-            playingRecordId={playingRecordId}
-            onPlayToggle={onPlayToggle}
-            onDelete={onDelete}
-          />
-        </>
-      ) : (
-        <RecordList
-          title="최근 기록"
-          records={records}
-          emptyText="아직 저장된 기록이 없어요."
-          playingRecordId={playingRecordId}
-          onPlayToggle={onPlayToggle}
-          onDelete={onDelete}
+      <BottomNavigation current={props.variant === "daily" ? "daily" : "breathRecord"} onNavigate={(target) => requestMove(target, "저장하고 이동하기", "저장하지 않고 이동하기")} />
+      {pendingMove && (
+        <ConfirmModal
+          title={saveError ? "녹음을 저장하지 못했어요" : "녹음을 저장하시겠습니까?"}
+          description={saveError || "지금 남긴 목소리를 저장한 뒤 이동할 수 있어요."}
+          actions={saveError ? <><button className={styles.primaryButton} onClick={saveAndMove} disabled={saving}>{saving ? "재시도 중" : "재시도"}</button><button className={styles.dangerButton} onClick={() => setAbandonOpen(true)}>포기하고 넘어가기</button><button className={styles.modalTextButton} onClick={() => { setPendingMove(null); setPendingBlob(null); setSaveError(""); }}>취소</button></> : <><button className={styles.primaryButton} onClick={saveAndMove} disabled={saving}>{saving ? "저장 중" : pendingMove.saveLabel}</button><button className={styles.outlineButton} onClick={() => moveNow(pendingMove.target)}>{pendingMove.discardLabel}</button><button className={styles.modalTextButton} onClick={() => { setPendingMove(null); setPendingBlob(null); }}>취소</button></>}
         />
       )}
+      {abandonOpen && <ConfirmModal title="녹음을 포기할까요?" description="저장하지 않은 녹음은 다시 복구할 수 없어요." actions={<><button className={styles.dangerButton} onClick={() => { setAbandonOpen(false); if (pendingMove) moveNow(pendingMove.target); }}>포기하고 넘어가기</button><button className={styles.outlineButton} onClick={() => setAbandonOpen(false)}>돌아가기</button></>} />}
     </section>
   );
 }
 
-function OverallProgressPanel({
-  progress,
-}: {
-  progress: OverallBreathProgress;
-}) {
-  const progressStyle = {
-    "--overall-progress": progress.gradient,
-  } as CSSProperties;
-
+function ArchiveScreen({ userName, records, onDelete, onNavigate }: { userName: string; records: VoiceRecord[]; onDelete: (id: string) => Promise<void>; onNavigate: (screen: Screen) => void }) {
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VoiceRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
   return (
-    <section className={styles.overallProgressPanel} aria-label="전체 숨결 성취도">
-      <div
-        className={styles.overallProgressRing}
-        style={progressStyle}
-        aria-label={`전체 숨결 기록 ${progress.completed}/${progress.goal} 완료`}
-      >
-        <span>{progress.percent}%</span>
-      </div>
-      <div className={styles.overallProgressCopy}>
-        <span className={styles.kicker}>통합 성취도</span>
-        <h2>
-          {progress.completed}/{progress.goal}개의 답변
-        </h2>
-        <div className={styles.segmentLegend}>
-          {progress.segments.length === 0 ? (
-            <span>아직 완료한 숨결 기록이 없어요.</span>
-          ) : (
-            progress.segments.map((segment) => (
-              <span key={segment.category}>
-                <i style={{ background: segment.color }} />
-                {segment.category} {segment.count}
-              </span>
-            ))
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CategoryProgressPanel({
-  progressItems,
-}: {
-  progressItems: CategoryProgress[];
-}) {
-  return (
-    <section className={styles.progressPanel} aria-label="카테고리별 숨결 완성률">
-      <div className={styles.progressHeader}>
-        <div>
-          <span className={styles.kicker}>카테고리 완성률</span>
-          <h2>숨결 기록 진행</h2>
-        </div>
-        <strong>
-          {progressItems.reduce((total, item) => total + item.completed, 0)}/
-          {progressItems.reduce((total, item) => total + item.total, 0)}
-        </strong>
-      </div>
-      <div className={styles.progressGrid}>
-        {progressItems.map((item) => {
-          const progressStyle = {
-            "--progress": `${item.percent}%`,
-            "--category-color": item.color,
-          } as CSSProperties;
-
-          return (
-            <article className={styles.progressCard} key={item.category}>
-              <div
-                className={styles.progressRing}
-                style={progressStyle}
-                aria-label={`${item.category} ${item.completed}/${item.total} 완료`}
-              >
-                <span>{item.percent}%</span>
-              </div>
-              <div>
-                <strong>{item.category}</strong>
-                <span>
-                  {item.completed}/{item.total} 완료
-                </span>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function Calendar2026({
-  month,
-  selectedDate,
-  recordsByDate,
-  onMonthChange,
-  onDateSelect,
-}: {
-  month: number;
-  selectedDate: string;
-  recordsByDate: Record<string, VoiceRecord[]>;
-  onMonthChange: (month: number) => void;
-  onDateSelect: (date: string) => void;
-}) {
-  const firstDay = new Date(2026, month, 1).getDay();
-  const daysInMonth = new Date(2026, month + 1, 0).getDate();
-  const cells = [
-    ...Array.from({ length: firstDay }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
-  ];
-  const monthTitle = `${month + 1}월`;
-
-  return (
-    <div className={styles.calendarPanel}>
-      <div className={styles.calendarTop}>
-        <button
-          className={styles.iconButton}
-          onClick={() => onMonthChange(Math.max(0, month - 1))}
-          aria-label="이전 달"
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <strong>2026년 {monthTitle}</strong>
-        <button
-          className={styles.iconButton}
-          onClick={() => onMonthChange(Math.min(11, month + 1))}
-          aria-label="다음 달"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-      <div className={styles.weekGrid}>
-        {WEEKDAYS.map((weekday) => (
-          <span key={weekday}>{weekday}</span>
+    <section className={styles.archiveScreen}>
+      <div className={styles.archiveHeader}><div><h1>{userName}님</h1><p>최근기록 <strong>{records.length}회</strong></p></div></div>
+      <div className={styles.archiveTitle}><Archive /><div><h2>이야기창고</h2><p>당신의 소중한 목소리 기록을 보관하고 있어요.</p></div></div>
+      <div className={styles.recordCards}>
+        {records.length === 0 && <div className={styles.emptyArchive}><Archive /><strong>아직 담긴 이야기가 없어요</strong><p>오늘의 목소리를 천천히 남겨보세요.</p></div>}
+        {records.map((record) => (
+          <article className={styles.recordCard} key={record.id}>
+            <div className={styles.recordThumb}><img src={record.imageUrl ?? legacyThumbnail(record)} alt={record.imageDescription || "기록과 함께 저장된 수채화 이미지"} /><span style={{ "--record-color": categoryColor(record.category) } as CSSProperties}>{record.category ?? "오늘"}</span></div>
+            <div className={styles.recordBody}><h3>{record.question}</h3><p>{formatRecordDate(record.createdAt)}</p><em><Mic />{record.type === "daily" ? "오늘이야기" : "숨결이야기"}</em><audio controls preload="metadata" src={record.audioUrl} /></div>
+            <div className={styles.recordMenuWrap}><button className={styles.moreButton} onClick={() => setMenuId(menuId === record.id ? null : record.id)} aria-label="기록 메뉴"><MoreVertical /></button>{menuId === record.id && <div className={styles.recordMenu}><a href={`${record.audioUrl}?download=1`}><Download />다운로드</a><button onClick={() => { setDeleteTarget(record); setMenuId(null); }}><Trash2 />삭제</button></div>}</div>
+          </article>
         ))}
       </div>
-      <div className={styles.dayGrid}>
-        {cells.map((day, index) => {
-          if (!day) {
-            return <span key={`empty-${index}`} />;
-          }
-          const key = `2026-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const hasRecord = Boolean(recordsByDate[key]?.length);
-          const selected = selectedDate === key;
-          return (
-            <button
-              key={key}
-              className={`${styles.dayButton} ${selected ? styles.selectedDay : ""}`}
-              onClick={() => onDateSelect(key)}
-            >
-              <span>{day}</span>
-              {hasRecord && <i aria-hidden="true" />}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function SettingsScreen({
-  fontSize,
-  onFontSizeChange,
-  onLogout,
-}: {
-  fontSize: FontSize;
-  onFontSizeChange: (fontSize: FontSize) => void;
-  onLogout: () => void;
-}) {
-  return (
-    <section className={styles.screen}>
-      <ScreenLabel title="설정" tone="blue" />
-      <div className={styles.settingsGroup}>
-        <span className={styles.kicker}>읽기와 사용</span>
-        <h1>글자 크기</h1>
-        <div className={styles.sizeOptions}>
-          {[
-            ["normal", "보통"],
-            ["large", "크게"],
-            ["xlarge", "아주 크게"],
-          ].map(([value, label]) => (
-            <button
-              key={value}
-              className={fontSize === value ? styles.selectedSize : ""}
-              onClick={() => onFontSizeChange(value as FontSize)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <button className={styles.secondaryButton} onClick={onLogout}>
-        <LogIn size={19} />
-        로그아웃
-      </button>
+      <BottomNavigation current="archive" onNavigate={onNavigate} />
+      {deleteTarget && <ConfirmModal title="이 녹음을 삭제할까요?" description="삭제한 음성 파일과 기록은 다시 복구할 수 없어요." actions={<><button className={styles.dangerButton} disabled={deleting} onClick={async () => { setDeleting(true); try { await onDelete(deleteTarget.id); setDeleteTarget(null); } finally { setDeleting(false); } }}>{deleting ? "삭제 중" : "영구 삭제"}</button><button className={styles.outlineButton} onClick={() => setDeleteTarget(null)}>취소</button></>} />}
     </section>
   );
 }
 
-function TopBar({
-  title,
-  onMenu,
-  onHome,
-}: {
-  title: string;
-  onMenu: () => void;
-  onHome: () => void;
-}) {
+function SettingsScreen({ fontSize, onFontSize, onLogout, onBack }: { fontSize: FontSize; onFontSize: (value: FontSize) => void; onLogout: () => void; onBack: () => void }) {
   return (
-    <header className={styles.topBar}>
-      <button className={styles.iconButton} onClick={onMenu} aria-label="메뉴 열기">
-        <Menu size={22} />
-      </button>
-      <strong>{title}</strong>
-      <button className={styles.iconButton} onClick={onHome} aria-label="홈으로">
-        <Home size={20} />
-      </button>
-    </header>
+    <section className={styles.settingsScreen}>
+      <ScreenHeader title="설정" onBack={onBack} />
+      <div className={styles.settingsPanel}><span>읽기와 사용</span><h1>글자 크기</h1><div>{(["normal", "large", "xlarge"] as FontSize[]).map((value, index) => <button key={value} className={fontSize === value ? styles.sizeSelected : ""} onClick={() => onFontSize(value)}>{["보통", "크게", "아주 크게"][index]}</button>)}</div></div>
+      <button className={styles.logoutButton} onClick={onLogout}><LogOut />로그아웃</button>
+    </section>
   );
 }
 
-function NavigationBar({
-  currentScreen,
-  onDaily,
-  onBreath,
-  onWarehouse,
-  onSettings,
-}: {
-  currentScreen: Screen;
-  onDaily: () => void;
-  onBreath: () => void;
-  onWarehouse: () => void;
-  onSettings: () => void;
-}) {
-  if (
-    currentScreen === "auth" ||
-    currentScreen === "register" ||
-    currentScreen === "welcome" ||
-    currentScreen === "splash"
-  ) {
-    return null;
+function BottomNavigation({ current, onNavigate }: { current: Screen; onNavigate: (screen: Screen) => void }) {
+  const items: Array<{ screen: Screen; label: string; icon: ReactNode; active: Screen[] }> = [
+    { screen: "home", label: "홈", icon: <Home />, active: ["home"] },
+    { screen: "daily", label: "오늘이야기", icon: <MessageCircle />, active: ["daily"] },
+    { screen: "breath", label: "숨결이야기", icon: <Heart />, active: ["breath", "breathRecord"] },
+    { screen: "archive", label: "이야기창고", icon: <Archive />, active: ["archive"] },
+  ];
+  return <nav className={styles.bottomNav}>{items.map((item) => <button key={item.screen} className={item.active.includes(current) ? styles.navActive : ""} onClick={() => onNavigate(item.screen)}>{item.icon}<span>{item.label}</span>{item.active.includes(current) && <i />}</button>)}</nav>;
+}
+
+function ScreenHeader({ title, onBack }: { title: string; onBack?: () => void }) {
+  return <header className={styles.screenHeader}>{onBack ? <button onClick={onBack} aria-label="이전 화면"><ArrowLeft /></button> : <span />}<h1>{title}</h1><span /></header>;
+}
+
+function ConfirmModal({ title, description, actions }: { title: string; description: string; actions: ReactNode }) {
+  return <div className={styles.modalLayer} role="presentation"><div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="modal-title"><span className={styles.modalLeaf}><Leaf /></span><h2 id="modal-title">{title}</h2><p>{description}</p><div className={styles.modalActions}>{actions}</div></div></div>;
+}
+
+function CategoryIcon({ name }: { name: string }) {
+  if (name === "brain") return <Brain />;
+  if (name === "user-round") return <UserRound />;
+  if (name === "clock-3") return <Clock3 />;
+  if (name === "heart") return <Heart />;
+  if (name === "map-pin") return <MapPin />;
+  if (name === "sparkles") return <Sparkles />;
+  if (name === "leaf") return <Leaf />;
+  if (name === "route") return <Route />;
+  if (name === "gem") return <Gem />;
+  if (name === "flower-2") return <Flower2 />;
+  if (name === "users-round") return <UsersRound />;
+  if (name === "lightbulb") return <Lightbulb />;
+  if (name === "book-open") return <BookOpen />;
+  if (name === "gift") return <Gift />;
+  if (name === "calendar-star") return <CalendarDays />;
+  return <Circle />;
+}
+
+function useAudioRecorder() {
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [createdAt, setCreatedAt] = useState("");
+  const [mimeType, setMimeType] = useState("");
+  const [error, setError] = useState("");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const elapsedRef = useRef(0);
+  const resolverRef = useRef<((blob: Blob | null) => void) | null>(null);
+
+  const clearMedia = useCallback(() => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const start = useCallback(async () => {
+    setError("");
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      return setError("이 브라우저에서는 녹음을 사용할 수 없어요.");
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      streamRef.current = stream;
+      recorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+      elapsedRef.current = 0;
+      setElapsed(0);
+      setBlob(null);
+      setCreatedAt(new Date().toISOString());
+      setMimeType(mediaRecorder.mimeType || "audio/webm");
+      mediaRecorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data); };
+      mediaRecorder.onstop = () => {
+        const nextBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" });
+        clearMedia();
+        setRecording(false);
+        setBlob(nextBlob.size ? nextBlob : null);
+        resolverRef.current?.(nextBlob.size ? nextBlob : null);
+        resolverRef.current = null;
+      };
+      mediaRecorder.start(1000);
+      setRecording(true);
+      timerRef.current = window.setInterval(() => {
+        elapsedRef.current += 1;
+        setElapsed(elapsedRef.current);
+        if (elapsedRef.current >= 600 && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      }, 1000);
+    } catch {
+      clearMedia();
+      setError("마이크 권한을 확인한 뒤 다시 시도해 주세요.");
+    }
+  }, [clearMedia]);
+
+  const stop = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") return Promise.resolve(blob);
+    return new Promise<Blob | null>((resolve) => {
+      resolverRef.current = resolve;
+      recorder.stop();
+    });
+  }, [blob]);
+
+  const discard = useCallback(() => {
+    setBlob(null);
+    setElapsed(0);
+    elapsedRef.current = 0;
+    setCreatedAt("");
+    setError("");
+  }, []);
+
+  useEffect(() => () => {
+    if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
+    clearMedia();
+  }, [clearMedia]);
+
+  return { recording, elapsed, blob, createdAt, mimeType, error, start, stop, discard };
+}
+
+function getCategories(questions: BreathQuestion[]) {
+  const map = new Map<string, CategoryView>();
+  questions.forEach((question) => map.set(question.category, { name: question.category, key: question.categoryKey, icon: question.categoryIcon, color: question.categoryColor }));
+  return [...map.values()].sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.name);
+    const bi = CATEGORY_ORDER.indexOf(b.name);
+    if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    return a.name.localeCompare(b.name, "ko");
+  });
+}
+
+function getQuestionStage(questions: BreathQuestion[], records: VoiceRecord[]) {
+  const typeIndices = [...new Set(questions.map((question) => question.typeIndex))].sort((a, b) => a - b);
+  for (const typeIndex of typeIndices) {
+    const stageQuestions = questions.filter((question) => question.typeIndex === typeIndex).sort((a, b) => a.questionIndex - b.questionIndex);
+    if (stageQuestions.some((question) => !isQuestionCompleted(question, records))) {
+      return { typeIndex, questions: stageQuestions, allCompleted: false };
+    }
   }
-
-  return (
-    <nav className={styles.bottomNav} aria-label="하단 이동">
-      <button
-        className={currentScreen === "dailyIntro" ? styles.activeNav : ""}
-        onClick={onDaily}
-      >
-        <Mic size={19} />
-        일상
-      </button>
-      <button
-        className={
-          currentScreen === "breathIntro" || currentScreen === "breathRecord"
-            ? styles.activeNav
-            : ""
-        }
-        onClick={onBreath}
-      >
-        <Play size={19} />
-        숨결
-      </button>
-      <button
-        className={currentScreen === "warehouse" ? styles.activeNav : ""}
-        onClick={onWarehouse}
-      >
-        <Warehouse size={19} />
-        창고
-      </button>
-      <button
-        className={currentScreen === "settings" ? styles.activeNav : ""}
-        onClick={onSettings}
-      >
-        <Settings size={19} />
-        설정
-      </button>
-    </nav>
-  );
+  return { typeIndex: null, questions: [], allCompleted: questions.length > 0 };
 }
 
-function Drawer({
-  open,
-  userName,
-  dailyCount,
-  breathCount,
-  breathGoal,
-  records,
-  playingRecordId,
-  onClose,
-  onWarehouse,
-  onSettings,
-  onPlayToggle,
-  onDelete,
-}: {
-  open: boolean;
-  userName: string;
-  dailyCount: number;
-  breathCount: number;
-  breathGoal: number;
-  records: VoiceRecord[];
-  playingRecordId: string | null;
-  onClose: () => void;
-  onWarehouse: () => void;
-  onSettings: () => void;
-  onPlayToggle: (recordId: string | null) => void;
-  onDelete: (recordId: string) => void;
-}) {
-  const recentRecords = records.slice(0, 5);
-
-  return (
-    <div className={`${styles.drawerLayer} ${open ? styles.openDrawer : ""}`}>
-      <button
-        className={styles.drawerScrim}
-        onClick={onClose}
-        aria-label="메뉴 닫기"
-      />
-      <aside className={styles.drawerPanel} aria-hidden={!open}>
-        <div className={styles.drawerHeader}>
-          <div>
-            <strong>{userName || "사용자"}님</strong>
-            <span>플래티넘 회원</span>
-          </div>
-          <button className={styles.iconButton} onClick={onClose} aria-label="닫기">
-            <X size={20} />
-          </button>
-        </div>
-        <button className={styles.storageSummary} onClick={onWarehouse}>
-          <span>숨결창고</span>
-          <strong>일상 기록 횟수 {dailyCount}회</strong>
-          <strong>숨결 기록 횟수 {breathCount}/{breathGoal}회</strong>
-        </button>
-        <div className={styles.drawerActions}>
-          <button onClick={onWarehouse}>
-            <Warehouse size={17} />
-            숨결창고
-          </button>
-          <button onClick={onSettings}>
-            <Settings size={17} />
-            설정
-          </button>
-        </div>
-        <div className={styles.drawerLists}>
-          <RecordList
-            compact
-            title="최근 기록"
-            titleAction={
-              <button className={styles.moreButton} onClick={onWarehouse}>
-                더보기
-              </button>
-            }
-            records={recentRecords}
-            emptyText="아직 저장된 기록이 없어요."
-            playingRecordId={playingRecordId}
-            onPlayToggle={onPlayToggle}
-            onDelete={onDelete}
-          />
-        </div>
-      </aside>
-    </div>
-  );
+function isQuestionCompleted(question: BreathQuestion, records: VoiceRecord[]) {
+  return records.some((record) => record.type === "breath" && (
+    (question.id && record.questionId === question.id) ||
+    (!record.questionId && record.questionType === question.typeId && record.category === question.category)
+  ));
 }
 
-function RecordList({
-  title,
-  titleAction,
-  records,
-  emptyText,
-  compact = false,
-  playingRecordId,
-  onPlayToggle,
-  onDelete,
-}: {
-  title: string;
-  titleAction?: ReactNode;
-  records: VoiceRecord[];
-  emptyText: string;
-  compact?: boolean;
-  playingRecordId: string | null;
-  onPlayToggle: (recordId: string | null) => void;
-  onDelete: (recordId: string) => void;
-}) {
-  return (
-    <div className={compact ? styles.compactList : styles.recordList}>
-      <div className={styles.listHeader}>
-        <h2>{title}</h2>
-        {titleAction}
-      </div>
-      {records.length === 0 ? (
-        <p className={styles.emptyText}>{emptyText}</p>
-      ) : (
-        records.map((record) => {
-          const isPlaying = playingRecordId === record.id;
-          return (
-            <article className={styles.recordItem} key={record.id}>
-              <div className={styles.recordTopline}>
-                <span>{record.type === "daily" ? "일상 기록" : "숨결 기록"}</span>
-                <span>{formatDuration(record.durationSeconds)}</span>
-              </div>
-              <strong>{formatRecordDate(record.createdAt)}</strong>
-              <p>{record.question}</p>
-              {isPlaying && (
-                <audio className={styles.audioPlayer} controls src={record.audioUrl} />
-              )}
-              <div className={styles.recordActions}>
-                <button
-                  onClick={() => onPlayToggle(isPlaying ? null : record.id)}
-                >
-                  <Play size={15} />
-                  다시 확인하기
-                </button>
-                <button onClick={() => onDelete(record.id)}>
-                  <Trash2 size={15} />
-                  삭제
-                </button>
-              </div>
-            </article>
-          );
-        })
-      )}
-    </div>
-  );
+function questionImageUrl(question: BreathQuestion) {
+  if (question.image?.imageUrl) return question.image.imageUrl;
+  return `/seed-images/${question.typeId}-${question.categoryKey}.webp`;
 }
 
-function ScreenLabel({
-  title,
-  tone,
-}: {
-  title: string;
-  tone: "blue" | "sage";
-}) {
-  return (
-    <div className={`${styles.screenLabel} ${tone === "sage" ? styles.sage : ""}`}>
-      <span>{title}</span>
-    </div>
-  );
+function legacyThumbnail(record: VoiceRecord) {
+  if (record.type === "daily") return "/seed-images/daily-default.webp";
+  const type = record.questionType || (record.questionTypeIndex === 2 ? "growth" : "childhood");
+  const key = record.category ? CATEGORY_FALLBACKS[record.category]?.key : null;
+  return key ? `/seed-images/${type}-${key}.webp` : "/images/archive-fallback.webp";
 }
 
-function getScreenTitle(screen: Screen) {
-  switch (screen) {
-    case "dailyIntro":
-    case "dailyRecord":
-      return "일상 기록";
-    case "breathIntro":
-    case "breathRecord":
-      return "숨결 기록";
-    case "warehouse":
-      return "숨결창고";
-    case "settings":
-      return "설정";
-    default:
-      return "숨결의 기록";
-  }
+function categoryColor(category?: string) {
+  return category ? CATEGORY_FALLBACKS[category]?.color ?? "#7c8a73" : "#f06a2a";
+}
+
+function getSeoulDateKey(value: Date | string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+}
+
+function formatRecordDate(iso: string) {
+  return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+}
+
+function formatDuration(seconds: number) {
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function audioExtension(mimeType: string) {
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("ogg")) return "ogg";
+  return "webm";
 }
