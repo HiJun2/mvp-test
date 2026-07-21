@@ -312,6 +312,288 @@
   .recordThumb img { width: 94px; height: 154px; }
 }
 
+/* Fit the primary app flows within the visible phone viewport. */
+.app {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.homeScreen,
+.storyScreen,
+.selectionScreen,
+.recorderScreen,
+.settingsScreen {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.homeScreen {
+  padding: calc(8px + env(safe-area-inset-top)) 14px calc(72px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-rows: minmax(150px, 1fr) auto minmax(128px, .78fr);
+  gap: 10px;
+}
+
+.settingsButton {
+  top: calc(8px + env(safe-area-inset-top));
+  right: 10px;
+}
+
+.homeHero {
+  min-height: 0;
+  height: 100%;
+  margin: -8px -14px 0;
+  padding: 38px 14px 8px;
+}
+
+.homeHero > img {
+  inset: 12px -10px 0 auto;
+  width: 62%;
+  height: 100%;
+  max-height: 238px;
+}
+
+.homeWelcome {
+  width: 62%;
+  margin-top: 0;
+}
+
+.homeWelcome h1 {
+  margin-bottom: 10px;
+  font-size: 1.55rem;
+}
+
+.homeWelcome p {
+  max-width: 180px;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+
+.todayCard {
+  min-height: 0;
+  height: clamp(106px, 16dvh, 136px);
+  grid-template-columns: minmax(76px, 96px) minmax(0, 1fr) 40px;
+  gap: 10px;
+  padding: 12px;
+}
+
+.todayCard > img { width: min(100%, 96px); }
+.todayCard > span { gap: 6px; }
+.todayCard strong { font-size: 1.12rem; }
+.todayCard small { font-size: .78rem; line-height: 1.45; }
+.todayCard i { width: 40px; height: 40px; }
+
+.homeMessage {
+  min-height: 0;
+  margin-top: 0;
+  padding: 14px 16px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.homeMessage > span {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 3px;
+}
+
+.homeMessage strong { line-height: 1.4; }
+.homeMessage p { margin: 2px 0; font-size: .82rem; }
+.homeMessage hr { width: 100%; margin: 6px 0; }
+.homeMessage em { font-size: .78rem; line-height: 1.45; }
+
+.storyScreen,
+.selectionScreen,
+.recorderScreen,
+.settingsScreen {
+  padding: calc(4px + env(safe-area-inset-top)) 14px calc(72px + env(safe-area-inset-bottom));
+}
+
+.storyScreen,
+.settingsScreen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.screenHeader {
+  min-height: 48px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+}
+
+.screenHeader h1 { font-size: 1.42rem; }
+.screenHeader button { width: 40px; height: 40px; }
+
+.completedToday {
+  min-height: 0;
+  height: 100%;
+  gap: 12px;
+}
+
+.selectionScreen {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.screenIntro {
+  margin: 0;
+  font-size: .85rem;
+  line-height: 1.45;
+}
+
+.categoryGrid { gap: 6px; }
+
+.categoryButton {
+  height: clamp(68px, 10dvh, 82px);
+  gap: 4px;
+}
+
+.categoryButton svg { width: 25px; height: 25px; }
+.categoryButton span { font-size: .78rem; }
+
+.selectionCard {
+  height: 100%;
+  min-height: 0;
+  margin-top: 0;
+  padding: clamp(14px, 3dvh, 24px) 16px 14px;
+}
+
+.selectionCopy h1 {
+  margin: clamp(10px, 2dvh, 18px) auto 8px;
+  font-size: 1.32rem;
+  line-height: 1.38;
+}
+
+.selectionCopy p { font-size: .84rem; line-height: 1.45; }
+.cardAction { min-height: 48px; padding-block: 9px; }
+
+.recorderScreen {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.recordQuestion {
+  flex: 0 1 auto;
+  padding: 2px 8px 5px;
+}
+
+.recordQuestion h1 {
+  margin: 8px auto 5px;
+  font-size: 1.28rem;
+  line-height: 1.35;
+}
+
+.recordQuestion p { font-size: .82rem; line-height: 1.4; }
+
+.recorderVisual,
+.dailyRecorder .recorderVisual {
+  flex: 1 1 190px;
+  min-height: 0;
+  height: auto;
+}
+
+.waveform {
+  height: 30px;
+  margin-bottom: 18px;
+}
+
+.recordButton {
+  width: clamp(88px, 14dvh, 112px);
+  height: clamp(88px, 14dvh, 112px);
+  box-shadow: 0 0 0 10px rgba(255,101,48,.1), 0 0 0 20px rgba(255,101,48,.06), 0 10px 24px rgba(255,101,48,.2);
+}
+
+.recordButton svg { width: 44px; height: 44px; }
+.timer { margin-top: 20px; font-size: 1.18rem; }
+.recordingLabel { margin-top: 4px; }
+
+.recordTip {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  min-height: 48px;
+  margin: 0;
+  padding: 8px 12px;
+  gap: 10px;
+}
+
+.recordTip p { font-size: .76rem; line-height: 1.4; }
+
+.recorderActions {
+  flex: 0 0 auto;
+  gap: 7px;
+  margin-top: 0;
+}
+
+.recorderActions > button,
+.recorderActions .primaryButton {
+  min-height: 46px;
+  padding-block: 8px;
+}
+
+.inlineError { flex: 0 0 auto; margin-top: 0; padding: 8px 10px; }
+
+.settingsPanel {
+  align-self: start;
+  margin-top: 12px;
+}
+
+.archiveScreen {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: calc(8px + env(safe-area-inset-top)) 14px calc(82px + env(safe-area-inset-bottom));
+}
+
+.bottomNav {
+  min-height: 68px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+}
+
+.bottomNav svg { width: 21px; height: 21px; }
+
+@media (max-height: 720px) {
+  .homeScreen {
+    grid-template-rows: minmax(126px, .9fr) auto minmax(108px, .68fr);
+    gap: 7px;
+  }
+
+  .homeHero > img { max-height: 190px; }
+  .homeWelcome h1 { font-size: 1.35rem; }
+  .todayCard { height: 100px; }
+  .todayCard > img { width: 76px; }
+  .homeMessage { padding: 9px 12px; gap: 2px; }
+  .homeMessage > span { width: 28px; height: 28px; }
+  .homeMessage hr { margin: 3px 0; }
+  .categoryButton { height: 62px; }
+  .categoryButton svg { width: 21px; height: 21px; }
+  .selectionCard { padding-top: 12px; }
+  .selectionCopy h1 { margin-top: 8px; font-size: 1.16rem; }
+  .recordQuestion h1 { font-size: 1.12rem; }
+  .recordQuestion p { font-size: .75rem; }
+  .recordTip { min-height: 42px; padding-block: 5px; }
+  .recorderActions > button,
+  .recorderActions .primaryButton { min-height: 42px; }
+}
+
+@media (max-width: 380px) {
+  .homeHero { min-height: 0; }
+  .homeHero > img { width: 60%; height: 100%; }
+  .homeWelcome h1 { font-size: 1.38rem; }
+  .todayCard { grid-template-columns: 74px minmax(0, 1fr) 36px; padding: 10px; }
+  .todayCard > img { width: 74px; }
+  .todayCard i { width: 36px; height: 36px; }
+  .categoryButton { height: clamp(64px, 9dvh, 76px); }
+  .selectionCard { min-height: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .loadingBlock i, .waveform i, .recordButton.recording { animation: none; }
 }

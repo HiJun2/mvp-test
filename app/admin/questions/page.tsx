@@ -29,7 +29,7 @@ const ICON_OPTIONS = [
   ["book-open", "책"], ["route", "전환"], ["gem", "보석"], ["flower-2", "꽃"],
   ["users-round", "관계"], ["lightbulb", "전구"], ["gift", "선물"], ["circle", "원"],
 ];
-const CATEGORY_KEYS: Record<string, string> = { 사건: "event", 시간: "time", 사랑: "love", 장소: "place" };
+const DEFAULT_IMAGE_FILE = "default-paper.png";
 
 export default function AdminQuestionsPage() {
   const [password, setPassword] = useState("");
@@ -178,25 +178,24 @@ export default function AdminQuestionsPage() {
   async function registerDefaultImages() {
     if (!data.dailyPrompt) return setStatus("관리 데이터를 먼저 불러와 주세요.");
     setBusy(true);
-    setStatus("비어 있는 이미지 항목을 확인하고 있어요...");
+    setStatus("모든 기본 이미지를 새 질감으로 교체하고 있어요...");
     try {
       const jobs: Array<{ scope: "daily" | "breath_intro" | "question"; file: string; description: string; questionId?: string }> = [];
-      if (!data.dailyPrompt.image) jobs.push({ scope: "daily", file: "daily-default.webp", description: "햇살과 초록 들길이 있는 오늘이야기 배경" });
-      if (!data.breathIntroImage) jobs.push({ scope: "breath_intro", file: "breath-intro.webp", description: "노을빛 호숫가 산책길과 벤치" });
+      jobs.push({ scope: "daily", file: DEFAULT_IMAGE_FILE, description: "따뜻한 아이보리 종이 질감의 오늘이야기 배경" });
+      jobs.push({ scope: "breath_intro", file: DEFAULT_IMAGE_FILE, description: "따뜻한 아이보리 종이 질감의 숨결이야기 선택 배경" });
       data.groups.forEach((group) => group.questions.forEach((question) => {
-        const categoryKey = CATEGORY_KEYS[question.category];
-        if (question.id && categoryKey && !question.image) {
-          jobs.push({ scope: "question", questionId: question.id, file: `${group.typeId}-${categoryKey}.webp`, description: `${group.typeTitle}의 ${question.category} 질문 수채화 풍경` });
+        if (question.id) {
+          jobs.push({ scope: "question", questionId: question.id, file: DEFAULT_IMAGE_FILE, description: `${group.typeTitle}의 ${question.category} 질문 기본 종이 질감` });
         }
       }));
       for (const job of jobs) {
         const response = await fetch(`/seed-images/${job.file}`);
         if (!response.ok) throw new Error(`${job.file} 기본 이미지를 찾을 수 없어요.`);
         const blob = await response.blob();
-        await uploadImage(job.scope, new File([blob], job.file, { type: blob.type || "image/webp" }), job.description, job.questionId, false);
+        await uploadImage(job.scope, new File([blob], job.file, { type: blob.type || "image/png" }), job.description, job.questionId, false);
       }
-      if (jobs.length) await load();
-      setStatus(jobs.length ? `기본 이미지 ${jobs.length}개를 등록했어요.` : "모든 항목에 이미 이미지가 등록되어 있어요.");
+      await load();
+      setStatus(`기본 이미지 ${jobs.length}개를 새 질감으로 교체했어요.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "기본 이미지를 등록하지 못했어요.");
     } finally {
@@ -209,7 +208,7 @@ export default function AdminQuestionsPage() {
     <main className={styles.adminPage}>
       <header className={styles.header}><a href="/"><ArrowLeft />앱으로</a><span>숨결 관리자</span><h1>질문과 이미지 관리</h1><p>오늘이야기, 숨결이야기 질문, 카테고리 노출과 R2 이미지 버전을 관리합니다.</p></header>
       <form className={styles.authBar} onSubmit={load}><label>관리자 비밀번호<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="ADMIN_PASSWORD" /></label><button disabled={busy}><RefreshCw />불러오기</button></form>
-      <div className={styles.toolbar}><div><strong>노출 카테고리 {visibleCategories.length}개</strong><span>질문유형 {data.groups.length}개</span></div><button onClick={loadDefaults} disabled={busy}><Plus />기본 질문</button><button onClick={registerDefaultImages} disabled={busy || !data.groups.length}><ImagePlus />기본 이미지 등록</button><button className={styles.saveButton} onClick={saveAll} disabled={busy || !data.groups.length}><Save />전체 저장</button></div>
+      <div className={styles.toolbar}><div><strong>노출 카테고리 {visibleCategories.length}개</strong><span>질문유형 {data.groups.length}개</span></div><button onClick={loadDefaults} disabled={busy}><Plus />기본 질문</button><button onClick={registerDefaultImages} disabled={busy || !data.groups.length}><ImagePlus />기본 이미지 전체 적용</button><button className={styles.saveButton} onClick={saveAll} disabled={busy || !data.groups.length}><Save />전체 저장</button></div>
       {status && <p className={styles.status}>{status}</p>}
 
       <section className={styles.section}><div className={styles.sectionHeading}><div><span>카테고리</span><h2>아이콘, 색상과 앱 노출</h2></div></div><div className={styles.categoryList}>{data.categories.map((category, index) => <article className={styles.categoryCard} key={category.key}><div><strong>{category.name}</strong><small>{category.key}</small></div><label>아이콘<select value={category.icon} onChange={(event) => updateCategory(index, { icon: event.target.value })}>{ICON_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>색상<span className={styles.colorField}><input type="color" value={category.color} onChange={(event) => updateCategory(index, { color: event.target.value })} /><code>{category.color}</code></span></label><button className={category.appVisible ? styles.visibleButton : styles.hiddenButton} onClick={() => updateCategory(index, { appVisible: !category.appVisible })}>{category.appVisible ? <Eye /> : <EyeOff />}{category.appVisible ? "앱 노출" : "숨김"}</button></article>)}</div></section>

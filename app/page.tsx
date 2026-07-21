@@ -470,8 +470,8 @@ function DailyStoryScreen({ prompt, existingRecord, onSave, onNavigate }: { prom
       eyebrow="오늘의 질문"
       question={prompt.question}
       helper={prompt.helperText}
-      imageUrl={prompt.image?.imageUrl ?? "/seed-images/daily-default.webp"}
-      imageAlt={prompt.image?.description || "햇살이 비추는 초록 들길"}
+      imageUrl={prompt.image?.imageUrl ?? "/seed-images/default-paper.png"}
+      imageAlt={prompt.image?.description || "따뜻한 아이보리 종이 질감"}
       recordMeta={{ type: "daily", question: prompt.question, questionId: prompt.id, imageId: prompt.image?.id }}
       onSave={onSave}
       onNavigate={onNavigate}
@@ -503,7 +503,7 @@ function BreathSelectionScreen(props: {
           );
         })}
       </div>
-      <article className={`${styles.selectionCard} ${selected ? styles.questionSelected : ""}`} style={{ backgroundImage: `linear-gradient(to bottom, rgba(255,250,245,.04), rgba(255,250,245,.2)), url(${selected ? questionImageUrl(selected) : props.introImage?.imageUrl ?? "/seed-images/breath-intro.webp"})` }}>
+      <article className={`${styles.selectionCard} ${selected ? styles.questionSelected : ""}`} style={{ backgroundImage: `linear-gradient(to bottom, rgba(255,250,245,.04), rgba(255,250,245,.2)), url(${selected ? questionImageUrl(selected) : props.introImage?.imageUrl ?? "/seed-images/default-paper.png"})` }}>
         <div className={styles.selectionCopy}>
           <span><Leaf /> {props.typeIndex ? `질문유형 ${props.typeIndex}` : "오늘의 질문"} <Leaf /></span>
           <h1>{selected ? selected.question : "오늘은 어떤 숨결이야기를 하고 싶으신가요?"}</h1>
@@ -842,14 +842,11 @@ function isQuestionCompleted(question: BreathQuestion, records: VoiceRecord[]) {
 
 function questionImageUrl(question: BreathQuestion) {
   if (question.image?.imageUrl) return question.image.imageUrl;
-  return `/seed-images/${question.typeId}-${question.categoryKey}.webp`;
+  return "/seed-images/default-paper.png";
 }
 
 function legacyThumbnail(record: VoiceRecord) {
-  if (record.type === "daily") return "/seed-images/daily-default.webp";
-  const type = record.questionType || (record.questionTypeIndex === 2 ? "growth" : "childhood");
-  const key = record.category ? CATEGORY_FALLBACKS[record.category]?.key : null;
-  return key ? `/seed-images/${type}-${key}.webp` : "/images/archive-fallback.webp";
+  return "/seed-images/default-paper.png";
 }
 
 function categoryColor(category?: string) {
