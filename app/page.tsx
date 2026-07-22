@@ -598,7 +598,7 @@ function RecorderExperience(props: {
     try {
       await props.onSave(buildRecord(blob));
       recorder.discard();
-      props.onNavigate("home");
+      props.onNavigate("breath");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "녹음을 저장하지 못했어요.");
     } finally {
