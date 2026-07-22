@@ -221,7 +221,8 @@
 .recorderVisual > img { display: none; }
 .dailyRecorder .recorderVisual::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(255,255,255,.04), rgba(255,255,255,.08)); }
 .waveform { height: 42px; display: flex; align-items: center; gap: 4px; color: #ff6530; margin-bottom: 28px; position: relative; z-index: 1; }
-.waveform i { width: 4px; height: 9px; border-radius: 3px; background: currentColor; animation: wave 1.2s ease-in-out infinite; }
+.waveform i { width: 4px; height: 9px; border-radius: 3px; background: currentColor; transform: scaleY(.72); }
+.waveformActive i { animation: wave 1.2s ease-in-out infinite; }
 .waveform i:nth-child(3n) { height: 28px; animation-delay: -.4s; }
 .waveform i:nth-child(4n) { height: 18px; animation-delay: -.7s; }
 .waveform i:nth-child(5n) { height: 34px; animation-delay: -.2s; }
@@ -349,10 +350,15 @@
 }
 
 .homeHero > img {
-  inset: 12px -10px 0 auto;
-  width: 62%;
-  height: 100%;
-  max-height: 238px;
+  inset: calc(56px + env(safe-area-inset-top)) 14px auto auto;
+  width: min(58%, 360px);
+  height: auto;
+  max-height: calc(100% - 68px - env(safe-area-inset-top));
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid rgba(230, 211, 194, .7);
+  border-radius: 8px;
 }
 
 .homeWelcome {
@@ -565,7 +571,10 @@
     gap: 7px;
   }
 
-  .homeHero > img { max-height: 190px; }
+  .homeHero > img {
+    inset: calc(52px + env(safe-area-inset-top)) 12px auto auto;
+    max-height: calc(100% - 60px - env(safe-area-inset-top));
+  }
   .homeWelcome h1 { font-size: 1.35rem; }
   .todayCard { height: 100px; }
   .todayCard > img { width: 76px; }
@@ -585,7 +594,7 @@
 
 @media (max-width: 380px) {
   .homeHero { min-height: 0; }
-  .homeHero > img { width: 60%; height: 100%; }
+  .homeHero > img { width: 56%; height: auto; }
   .homeWelcome h1 { font-size: 1.38rem; }
   .todayCard { grid-template-columns: 74px minmax(0, 1fr) 36px; padding: 10px; }
   .todayCard > img { width: 74px; }
@@ -595,5 +604,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loadingBlock i, .waveform i, .recordButton.recording { animation: none; }
+  .loadingBlock i, .waveformActive i, .recordButton.recording { animation: none; }
 }

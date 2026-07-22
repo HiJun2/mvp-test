@@ -20,6 +20,7 @@ export async function onRequestGet({ env }: PagesContext) {
         question_types.sort_order AS type_sort_order,
         questions.category,
         questions.question,
+        questions.helper_text,
         questions.sort_order,
         questions.is_active,
         categories.key AS category_key,
@@ -58,6 +59,7 @@ export async function onRequestGet({ env }: PagesContext) {
         categoryIcon: row.category_icon,
         categoryColor: row.category_color,
         question: row.question,
+        helperText: row.helper_text,
         image: row.image_id
           ? {
               id: row.image_id,

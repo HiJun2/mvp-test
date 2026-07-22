@@ -14,6 +14,7 @@ import {
   type QuestionTypeRow,
 } from "../../_shared/questions";
 import { getDb, type PagesContext } from "../../_shared/types";
+import { DEFAULT_BREATH_HELPER_TEXT } from "../../../shared/contentDefaults";
 
 type AdminImage = {
   id: string;
@@ -26,6 +27,7 @@ type AdminQuestion = {
   id?: string;
   category?: string;
   question?: string;
+  helperText?: string;
   sortOrder?: number;
   isActive?: boolean;
 };
@@ -83,7 +85,7 @@ export async function onRequestGet({ request, env }: PagesContext) {
     ).all<QuestionTypeRow>(),
     db.prepare(
       `SELECT
-        questions.id, questions.type_id, questions.category, questions.question,
+        questions.id, questions.type_id, questions.category, questions.question, questions.helper_text,
         questions.sort_order, questions.is_active,
         content_images.id AS image_id,
         content_images.description AS image_description,
@@ -138,6 +140,7 @@ export async function onRequestGet({ request, env }: PagesContext) {
           id: questionRow.id,
           category: questionRow.category,
           question: questionRow.question,
+          helperText: questionRow.helper_text || DEFAULT_BREATH_HELPER_TEXT,
           sortOrder: questionRow.sort_order,
           isActive: Boolean(questionRow.is_active),
           image: questionRow.image_id
@@ -252,6 +255,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
         const questionId = normalizeId(item.id) || randomId("q_");
         const category = item.category?.trim() ?? "";
         const question = item.question?.trim() ?? "";
+        const helperText = item.helperText?.trim() || DEFAULT_BREATH_HELPER_TEXT;
         if (!category || !question) {
           return errorResponse("카테고리와 질문 문구를 모두 입력해 주세요.");
         }
@@ -266,12 +270,13 @@ export async function onRequestPost({ request, env }: PagesContext) {
 
         await db.prepare(
           `INSERT INTO questions
-          (id, type_id, category, question, sort_order, is_active, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (id, type_id, category, question, helper_text, sort_order, is_active, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             type_id = excluded.type_id,
             category = excluded.category,
             question = excluded.question,
+            helper_text = excluded.helper_text,
             sort_order = excluded.sort_order,
             is_active = excluded.is_active,
             updated_at = excluded.updated_at`,
@@ -281,6 +286,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
             typeId,
             category,
             question,
+            helperText,
             Number.isFinite(item.sortOrder) ? item.sortOrder : questionIndex,
             item.isActive === false ? 0 : 1,
             now,

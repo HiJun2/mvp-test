@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS questions (
   type_id TEXT NOT NULL,
   category TEXT NOT NULL,
   question TEXT NOT NULL,
+  helper_text TEXT NOT NULL DEFAULT '당신의 기억과 감정을 자유롭게 이야기해 주세요.',
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,

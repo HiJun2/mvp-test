@@ -44,6 +44,7 @@ import {
   useState,
 } from "react";
 import { DEFAULT_QUESTION_GROUPS } from "./defaultQuestions";
+import { DEFAULT_BREATH_HELPER_TEXT } from "../shared/contentDefaults";
 import styles from "./page.module.css";
 
 type Screen = "splash" | "auth" | "register" | "home" | "daily" | "breath" | "breathRecord" | "archive" | "settings";
@@ -64,6 +65,7 @@ type BreathQuestion = {
   categoryIcon: string;
   categoryColor: string;
   question: string;
+  helperText: string;
   image: ContentImage | null;
 };
 type VoiceRecord = {
@@ -135,6 +137,7 @@ const FALLBACK_QUESTIONS: BreathQuestion[] = DEFAULT_QUESTION_GROUPS.flatMap((gr
       categoryIcon: category.icon,
       categoryColor: category.color,
       question: item.question,
+      helperText: item.helperText?.trim() || DEFAULT_BREATH_HELPER_TEXT,
       image: null,
     }];
   }),
@@ -507,7 +510,7 @@ function BreathSelectionScreen(props: {
         <div className={styles.selectionCopy}>
           <span><Leaf /> {props.typeIndex ? `질문유형 ${props.typeIndex}` : "오늘의 질문"} <Leaf /></span>
           <h1>{selected ? selected.question : "오늘은 어떤 숨결이야기를 하고 싶으신가요?"}</h1>
-          <p>{selected ? "당신의 기억과 감정을 자유롭게 이야기해 주세요." : "4개의 카테고리 중에서 선택해 주세요."}</p>
+          <p>{selected ? selected.helperText : "4개의 카테고리 중에서 선택해 주세요."}</p>
         </div>
         {selected && <button className={styles.cardAction} onClick={props.onReady}><Leaf />이 질문으로 할게요<ChevronRight /></button>}
       </article>
@@ -524,7 +527,7 @@ function BreathRecorderScreen({ question, onSave, onNext, onNavigate }: { questi
       title="숨결이야기"
       eyebrow="오늘의 질문"
       question={question.question}
-      helper="당신의 기억과 감정을 자유롭게 이야기해 주세요."
+      helper={question.helperText}
       imageUrl={questionImageUrl(question)}
       imageAlt={question.image?.description || `${question.category} 질문을 위한 수채화 풍경`}
       recordMeta={{ type: "breath", question: question.question, questionId: question.id, questionTypeIndex: question.typeIndex, questionIndex: question.questionIndex, category: question.category, questionType: question.typeId, questionTypeTitle: question.typeTitle, imageId: question.image?.id }}
@@ -620,7 +623,7 @@ function RecorderExperience(props: {
       <div className={styles.recordQuestion}><span><Leaf /> {props.eyebrow} <Leaf /></span><h1>{props.question}</h1><p>{props.helper}</p></div>
       <div className={styles.recorderVisual} style={props.variant === "daily" ? { backgroundImage: `url(${props.imageUrl})` } : undefined}>
         {props.variant === "breath" && <img src={props.imageUrl} alt={props.imageAlt} />}
-        <div className={styles.waveform} aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <i key={index} />)}</div>
+        <div className={`${styles.waveform} ${recorder.recording ? styles.waveformActive : ""}`} aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <i key={index} />)}</div>
         <button className={`${styles.recordButton} ${recorder.recording ? styles.recording : ""}`} onClick={recorder.recording ? () => recorder.stop() : recorder.start} disabled={saving} aria-label={recorder.recording ? "녹음 중지" : "녹음 시작"}>
           {recorder.recording ? <Pause /> : <Mic />}
         </button>

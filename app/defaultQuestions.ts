@@ -2,6 +2,7 @@ export type DefaultQuestion = {
   id?: string;
   category: string;
   question: string;
+  helperText?: string;
   isActive: boolean;
 };
 

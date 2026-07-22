@@ -13,11 +13,12 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { DEFAULT_QUESTION_GROUPS } from "../../defaultQuestions";
+import { DEFAULT_BREATH_HELPER_TEXT } from "../../../shared/contentDefaults";
 import styles from "./page.module.css";
 
 type AdminImage = { id: string; description: string; version: number; createdAt?: string; imageUrl: string } | null;
 type AdminCategory = { key: string; name: string; icon: string; color: string; appVisible: boolean };
-type AdminQuestion = { id?: string; category: string; question: string; sortOrder?: number; isActive: boolean; image?: AdminImage };
+type AdminQuestion = { id?: string; category: string; question: string; helperText: string; sortOrder?: number; isActive: boolean; image?: AdminImage };
 type AdminQuestionGroup = { typeId?: string; typeTitle: string; sortOrder?: number; isActive: boolean; questions: AdminQuestion[] };
 type DailyPrompt = { id: string; question: string; helperText: string; isActive: boolean; image: AdminImage };
 type AdminPayload = { categories: AdminCategory[]; dailyPrompt: DailyPrompt | null; breathIntroImage: AdminImage; groups: AdminQuestionGroup[] };
@@ -116,6 +117,7 @@ export default function AdminQuestionsPage() {
             const existingQuestion = existingGroup?.questions.find((item) => item.category === question.category);
             return {
               ...question,
+              helperText: existingQuestion?.helperText?.trim() || question.helperText?.trim() || DEFAULT_BREATH_HELPER_TEXT,
               id: existingQuestion?.id,
               image: existingQuestion?.image ?? null,
               sortOrder: questionIndex,
@@ -217,7 +219,31 @@ export default function AdminQuestionsPage() {
 
       <section className={styles.section}><div className={styles.sectionHeading}><div><span>숨결이야기</span><h2>첫 선택 화면 배경</h2></div></div><ImageManager title="카테고리 선택 배경" image={data.breathIntroImage} busy={uploadingKey === "breath_intro" || uploadingKey === data.breathIntroImage?.id} onUpload={(file, description) => uploadImage("breath_intro", file, description)} onDeactivate={deactivateImage} /></section>
 
-      <section className={styles.groupList}>{data.groups.map((group, groupIndex) => <details className={styles.groupPanel} key={group.typeId ?? groupIndex} open={groupIndex === 0}><summary><span>질문유형 {groupIndex + 1}</span><strong>{group.typeTitle}</strong><small>{group.questions.length}개 질문</small></summary><div className={styles.groupFields}><label>질문유형 제목<input value={group.typeTitle} onChange={(event) => updateGroup(groupIndex, { typeTitle: event.target.value })} /></label><button className={group.isActive ? styles.visibleButton : styles.hiddenButton} onClick={() => updateGroup(groupIndex, { isActive: !group.isActive })}>{group.isActive ? <Eye /> : <EyeOff />}{group.isActive ? "활성" : "비활성"}</button></div><div className={styles.questionList}>{group.questions.map((question, questionIndex) => <article className={styles.questionCard} key={question.id ?? questionIndex}><div className={styles.questionFields}><span>질문 {questionIndex + 1}</span><label>카테고리<input value={question.category} onChange={(event) => updateQuestion(groupIndex, questionIndex, { category: event.target.value })} /></label><label>질문 문구<textarea value={question.question} onChange={(event) => updateQuestion(groupIndex, questionIndex, { question: event.target.value })} /></label><button className={question.isActive ? styles.visibleButton : styles.hiddenButton} onClick={() => updateQuestion(groupIndex, questionIndex, { isActive: !question.isActive })}>{question.isActive ? <Eye /> : <EyeOff />}{question.isActive ? "활성" : "비활성"}</button></div>{question.id && <ImageManager title={`${question.category} 질문 이미지`} image={question.image ?? null} busy={uploadingKey === question.id || uploadingKey === question.image?.id} onUpload={(file, description) => uploadImage("question", file, description, question.id)} onDeactivate={deactivateImage} />}</article>)}</div></details>)}</section>
+      <section className={styles.groupList}>
+        {data.groups.map((group, groupIndex) => (
+          <details className={styles.groupPanel} key={group.typeId ?? groupIndex} open={groupIndex === 0}>
+            <summary><span>질문유형 {groupIndex + 1}</span><strong>{group.typeTitle}</strong><small>{group.questions.length}개 질문</small></summary>
+            <div className={styles.groupFields}>
+              <label>질문유형 제목<input value={group.typeTitle} onChange={(event) => updateGroup(groupIndex, { typeTitle: event.target.value })} /></label>
+              <button className={group.isActive ? styles.visibleButton : styles.hiddenButton} onClick={() => updateGroup(groupIndex, { isActive: !group.isActive })}>{group.isActive ? <Eye /> : <EyeOff />}{group.isActive ? "활성" : "비활성"}</button>
+            </div>
+            <div className={styles.questionList}>
+              {group.questions.map((question, questionIndex) => (
+                <article className={styles.questionCard} key={question.id ?? questionIndex}>
+                  <div className={styles.questionFields}>
+                    <span>질문 {questionIndex + 1}</span>
+                    <label>카테고리<input value={question.category} onChange={(event) => updateQuestion(groupIndex, questionIndex, { category: event.target.value })} /></label>
+                    <label>질문 문구<textarea value={question.question} onChange={(event) => updateQuestion(groupIndex, questionIndex, { question: event.target.value })} /></label>
+                    <label>보조 문구<textarea value={question.helperText} placeholder={DEFAULT_BREATH_HELPER_TEXT} onChange={(event) => updateQuestion(groupIndex, questionIndex, { helperText: event.target.value })} /></label>
+                    <button className={question.isActive ? styles.visibleButton : styles.hiddenButton} onClick={() => updateQuestion(groupIndex, questionIndex, { isActive: !question.isActive })}>{question.isActive ? <Eye /> : <EyeOff />}{question.isActive ? "활성" : "비활성"}</button>
+                  </div>
+                  {question.id && <ImageManager title={`${question.category} 질문 이미지`} image={question.image ?? null} busy={uploadingKey === question.id || uploadingKey === question.image?.id} onUpload={(file, description) => uploadImage("question", file, description, question.id)} onDeactivate={deactivateImage} />}
+                </article>
+              ))}
+            </div>
+          </details>
+        ))}
+      </section>
     </main>
   );
 }
