@@ -139,12 +139,10 @@
 .errorText { margin: 0; color: #a43d35 !important; font-weight: 800; }
 
 .homeScreen { min-height: 100dvh; padding: calc(30px + env(safe-area-inset-top)) 18px 112px; }
-.settingsButton { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 2; border-radius: 50%; background: rgba(255,255,255,.72); }
+.settingsButton { position: absolute; top: 12px; right: 12px; z-index: 2; border-radius: 50%; background: rgba(255,255,255,.82); }
 
-.homeHero { min-height: 350px; position: relative; display: flex; align-items: center; margin: -30px -18px 0; padding: 48px 18px 16px; overflow: hidden; }
-.homeHero::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 76% 46%, rgba(255, 223, 185, .32), transparent 46%); pointer-events: none; }
-.homeHero > img { position: absolute; inset: 24px -20px 0 auto; width: 68%; height: 326px; object-fit: contain; object-position: right bottom; }
-.homeWelcome { position: relative; z-index: 1; align-self: center; width: 60%; margin-top: -18px; }
+.homeHero { min-height: 220px; position: relative; display: flex; align-items: center; padding: 28px 76px 28px 24px; overflow: hidden; border: 1px solid #f0e4da; border-radius: 8px; background-color: #fffdf8; background-image: url("/seed-images/default-paper.png"); background-position: center; background-size: cover; box-shadow: 0 12px 28px rgba(95, 69, 48, .08); }
+.homeWelcome { position: relative; z-index: 1; width: 100%; margin: 0; }
 .homeWelcome h1 { margin: 0 0 22px; font-size: 1.9rem; line-height: 1.25; }
 .homeWelcome h1 span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .homeWelcome p { margin: 0; line-height: 1.75; font-weight: 650; }
@@ -299,8 +297,7 @@
 @keyframes wave { 0%,100% { transform: scaleY(.55); } 50% { transform: scaleY(1); } }
 
 @media (max-width: 380px) {
-  .homeHero { min-height: 320px; }
-  .homeHero > img { width: 68%; height: 290px; }
+  .homeHero { min-height: 190px; }
   .homeWelcome h1 { font-size: 1.85rem; }
   .todayCard { grid-template-columns: 92px minmax(0,1fr) 42px; padding: 14px; }
   .todayCard > img { width: 92px; }
@@ -333,37 +330,25 @@
 .homeScreen {
   padding: calc(8px + env(safe-area-inset-top)) 14px calc(72px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-rows: minmax(150px, 1fr) auto minmax(128px, .78fr);
+  grid-template-rows: clamp(150px, 24dvh, 220px) auto minmax(128px, 1fr);
   gap: 10px;
 }
 
 .settingsButton {
-  top: calc(8px + env(safe-area-inset-top));
+  top: 10px;
   right: 10px;
 }
 
 .homeHero {
   min-height: 0;
   height: 100%;
-  margin: -8px -14px 0;
-  padding: 38px 14px 8px;
-}
-
-.homeHero > img {
-  inset: calc(56px + env(safe-area-inset-top)) 14px auto auto;
-  width: min(58%, 360px);
-  height: auto;
-  max-height: calc(100% - 68px - env(safe-area-inset-top));
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  object-position: center;
-  border: 1px solid rgba(230, 211, 194, .7);
-  border-radius: 8px;
+  margin: 0;
+  padding: 24px 66px 24px 20px;
 }
 
 .homeWelcome {
-  width: 62%;
-  margin-top: 0;
+  width: 100%;
+  margin: 0;
 }
 
 .homeWelcome h1 {
@@ -372,7 +357,7 @@
 }
 
 .homeWelcome p {
-  max-width: 180px;
+  max-width: 300px;
   font-size: .86rem;
   line-height: 1.5;
 }
@@ -567,14 +552,10 @@
 
 @media (max-height: 720px) {
   .homeScreen {
-    grid-template-rows: minmax(126px, .9fr) auto minmax(108px, .68fr);
+    grid-template-rows: clamp(132px, 22dvh, 158px) auto minmax(108px, 1fr);
     gap: 7px;
   }
 
-  .homeHero > img {
-    inset: calc(52px + env(safe-area-inset-top)) 12px auto auto;
-    max-height: calc(100% - 60px - env(safe-area-inset-top));
-  }
   .homeWelcome h1 { font-size: 1.35rem; }
   .todayCard { height: 100px; }
   .todayCard > img { width: 76px; }
@@ -594,7 +575,7 @@
 
 @media (max-width: 380px) {
   .homeHero { min-height: 0; }
-  .homeHero > img { width: 56%; height: auto; }
+  .homeHero { padding: 18px 58px 18px 16px; }
   .homeWelcome h1 { font-size: 1.38rem; }
   .todayCard { grid-template-columns: 74px minmax(0, 1fr) 36px; padding: 10px; }
   .todayCard > img { width: 74px; }

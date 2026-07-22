@@ -426,10 +426,9 @@ function RegisterScreen(props: {
 function HomeScreen({ userName, todayComplete, onToday, onArchive, onSettings }: { userName: string; todayComplete: boolean; onToday: () => void; onArchive: () => void; onSettings: () => void }) {
   return (
     <section className={styles.homeScreen}>
-      <button className={styles.settingsButton} onClick={onSettings} aria-label="설정"><Settings /></button>
       <div className={styles.homeHero}>
+        <button className={styles.settingsButton} onClick={onSettings} aria-label="설정"><Settings /></button>
         <div className={styles.homeWelcome}><h1><span>{userName}님</span>환영합니다</h1><p>오늘도 당신의 소중한 이야기를 기록해 보세요.</p></div>
-        <img src="/images/home-chair.webp" alt="햇살 아래 편안한 의자와 화분" />
       </div>
       <button className={styles.todayCard} onClick={todayComplete ? onArchive : onToday}>
         <img src="/images/today-notebook.webp" alt="차와 노트가 놓인 탁자" />
