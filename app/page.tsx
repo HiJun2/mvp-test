@@ -507,7 +507,6 @@ function BreathSelectionScreen(props: {
       </div>
       <article className={`${styles.selectionCard} ${selected ? styles.questionSelected : ""}`} style={{ backgroundImage: `linear-gradient(to bottom, rgba(255,250,245,.04), rgba(255,250,245,.2)), url(${selected ? questionImageUrl(selected) : props.introImage?.imageUrl ?? "/seed-images/default-paper.png"})` }}>
         <div className={styles.selectionCopy}>
-          <span><Leaf /> 오늘의 질문 <Leaf /></span>
           <h1>{selected ? selected.question : "오늘은 어떤 숨결이야기를 하고 싶으신가요?"}</h1>
           <p>{selected ? selected.helperText : "4개의 카테고리 중에서 선택해 주세요."}</p>
         </div>
@@ -524,7 +523,6 @@ function BreathRecorderScreen({ question, onSave, onNext, onNavigate }: { questi
     <RecorderExperience
       variant="breath"
       title="숨결이야기"
-      eyebrow="오늘의 질문"
       question={question.question}
       helper={question.helperText}
       imageUrl={questionImageUrl(question)}
@@ -539,7 +537,7 @@ function BreathRecorderScreen({ question, onSave, onNext, onNavigate }: { questi
 }
 
 function RecorderExperience(props: {
-  variant: "daily" | "breath"; title: string; eyebrow: string; question: string; helper: string; imageUrl: string; imageAlt: string;
+  variant: "daily" | "breath"; title: string; eyebrow?: string; question: string; helper: string; imageUrl: string; imageAlt: string;
   recordMeta: Omit<PendingRecord, "createdAt" | "durationSeconds" | "audioBlob" | "mimeType">;
   onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNavigate: (screen: Screen) => void;
   onNext?: () => void; primaryAction: "saveDaily" | "nextQuestion";
@@ -619,7 +617,7 @@ function RecorderExperience(props: {
   return (
     <section className={`${styles.recorderScreen} ${props.variant === "daily" ? styles.dailyRecorder : ""}`}>
       <ScreenHeader title={props.title} onBack={() => requestMove(props.variant === "daily" ? "home" : "breath", "저장하고 이동하기", "저장하지 않고 이동하기")} />
-      <div className={styles.recordQuestion}><span><Leaf /> {props.eyebrow} <Leaf /></span><h1>{props.question}</h1><p>{props.helper}</p></div>
+      <div className={styles.recordQuestion}>{props.eyebrow && <span><Leaf /> {props.eyebrow} <Leaf /></span>}<h1>{props.question}</h1><p>{props.helper}</p></div>
       <div className={styles.recorderVisual} style={props.variant === "daily" ? { backgroundImage: `url(${props.imageUrl})` } : undefined}>
         {props.variant === "breath" && <img src={props.imageUrl} alt={props.imageAlt} />}
         <div className={`${styles.waveform} ${recorder.recording ? styles.waveformActive : ""}`} aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <i key={index} />)}</div>
