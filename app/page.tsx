@@ -25,6 +25,7 @@ import {
   Mic,
   MoreVertical,
   Pause,
+  Play,
   RotateCcw,
   Route,
   Settings,
@@ -567,7 +568,7 @@ function RecorderExperience(props: {
   }, [props, recorder]);
 
   async function requestMove(target: Screen | "next", saveLabel: string, discardLabel: string) {
-    const blob = recorder.recording ? await recorder.stop() : recorder.blob;
+    const blob = recorder.recording || recorder.paused ? await recorder.stop() : recorder.blob;
     if (!blob) return moveNow(target);
     setPendingBlob(blob);
     setPendingMove({ target, saveLabel, discardLabel });
@@ -589,7 +590,7 @@ function RecorderExperience(props: {
   }
 
   async function saveDailyNow() {
-    const blob = recorder.recording ? await recorder.stop() : recorder.blob;
+    const blob = recorder.recording || recorder.paused ? await recorder.stop() : recorder.blob;
     if (!blob) return;
     setSaving(true);
     setSaveError("");
@@ -606,13 +607,13 @@ function RecorderExperience(props: {
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (!recorder.recording && !recorder.blob) return;
+      if (!recorder.recording && !recorder.paused && !recorder.blob) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [recorder.blob, recorder.recording]);
+  }, [recorder.blob, recorder.paused, recorder.recording]);
 
   return (
     <section className={`${styles.recorderScreen} ${props.variant === "daily" ? styles.dailyRecorder : ""}`}>
@@ -621,16 +622,18 @@ function RecorderExperience(props: {
       <div className={styles.recorderVisual} style={props.variant === "daily" ? { backgroundImage: `url(${props.imageUrl})` } : undefined}>
         {props.variant === "breath" && <img src={props.imageUrl} alt={props.imageAlt} />}
         <div className={`${styles.waveform} ${recorder.recording ? styles.waveformActive : ""}`} aria-hidden="true">{Array.from({ length: 25 }, (_, index) => <i key={index} />)}</div>
-        <button className={`${styles.recordButton} ${recorder.recording ? styles.recording : ""}`} onClick={recorder.recording ? () => recorder.stop() : recorder.start} disabled={saving} aria-label={recorder.recording ? "녹음 중지" : "녹음 시작"}>
-          {recorder.recording ? <Pause /> : <Mic />}
+        <button className={`${styles.recordButton} ${recorder.recording ? styles.recording : ""} ${recorder.paused ? styles.paused : ""}`} onClick={recorder.recording ? recorder.pause : recorder.paused ? recorder.resume : recorder.start} disabled={saving} aria-label={recorder.recording ? "녹음 일시정지" : recorder.paused ? "녹음 이어서 하기" : "녹음 시작"}>
+          {recorder.recording ? <Pause /> : recorder.paused ? <Play /> : <Mic />}
         </button>
         <strong className={styles.timer}>{formatDuration(recorder.elapsed)}</strong>
         {recorder.recording && <span className={styles.recordingLabel}>● 녹음 중</span>}
+        {recorder.paused && <span className={styles.pausedLabel}>● 일시정지</span>}
       </div>
       <div className={styles.recordTip}><Lightbulb /><p>천천히, 편안하게 이야기해 주세요.<br />다시 들어보고 수정할 수 있어요.</p></div>
       {recorder.error && <p className={styles.errorText}>{recorder.error}</p>}
       {saveError && !pendingMove && <div className={styles.inlineError}><p>{saveError}</p><button onClick={saveDailyNow}><RotateCcw />재시도</button></div>}
       <div className={styles.recorderActions}>
+        {(recorder.recording || recorder.paused) && <button className={styles.outlineButton} onClick={() => recorder.stop()} disabled={saving}>녹음 완료하기</button>}
         {props.variant === "daily" ? (
           <>
             {recorder.blob && <button className={styles.primaryButton} onClick={saveDailyNow} disabled={saving}>{saving ? "저장 중" : "오늘이야기 저장하기"}</button>}
@@ -729,6 +732,7 @@ function CategoryIcon({ name }: { name: string }) {
 
 function useAudioRecorder() {
   const [recording, setRecording] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [createdAt, setCreatedAt] = useState("");
@@ -741,12 +745,28 @@ function useAudioRecorder() {
   const elapsedRef = useRef(0);
   const resolverRef = useRef<((blob: Blob | null) => void) | null>(null);
 
-  const clearMedia = useCallback(() => {
+  const stopTimer = useCallback(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
+  }, []);
+
+  const clearMedia = useCallback(() => {
+    stopTimer();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-  }, []);
+  }, [stopTimer]);
+
+  const startTimer = useCallback((mediaRecorder: MediaRecorder) => {
+    stopTimer();
+    timerRef.current = window.setInterval(() => {
+      elapsedRef.current += 1;
+      setElapsed(elapsedRef.current);
+      if (elapsedRef.current >= 600 && mediaRecorder.state !== "inactive") {
+        stopTimer();
+        mediaRecorder.stop();
+      }
+    }, 1000);
+  }, [stopTimer]);
 
   const start = useCallback(async () => {
     setError("");
@@ -762,6 +782,7 @@ function useAudioRecorder() {
       elapsedRef.current = 0;
       setElapsed(0);
       setBlob(null);
+      setPaused(false);
       setCreatedAt(new Date().toISOString());
       setMimeType(mediaRecorder.mimeType || "audio/webm");
       mediaRecorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data); };
@@ -769,36 +790,66 @@ function useAudioRecorder() {
         const nextBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || "audio/webm" });
         clearMedia();
         setRecording(false);
+        setPaused(false);
         setBlob(nextBlob.size ? nextBlob : null);
         resolverRef.current?.(nextBlob.size ? nextBlob : null);
         resolverRef.current = null;
       };
       mediaRecorder.start(1000);
       setRecording(true);
-      timerRef.current = window.setInterval(() => {
-        elapsedRef.current += 1;
-        setElapsed(elapsedRef.current);
-        if (elapsedRef.current >= 600 && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-      }, 1000);
+      startTimer(mediaRecorder);
     } catch {
       clearMedia();
+      setRecording(false);
+      setPaused(false);
       setError("마이크 권한을 확인한 뒤 다시 시도해 주세요.");
     }
-  }, [clearMedia]);
+  }, [clearMedia, startTimer]);
+
+  const pause = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "recording") return;
+    try {
+      recorder.pause();
+      stopTimer();
+      setRecording(false);
+      setPaused(true);
+    } catch {
+      setError("녹음을 일시정지하지 못했어요. 다시 시도해 주세요.");
+    }
+  }, [stopTimer]);
+
+  const resume = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "paused") return;
+    try {
+      recorder.resume();
+      setPaused(false);
+      setRecording(true);
+      startTimer(recorder);
+    } catch {
+      setError("녹음을 이어서 시작하지 못했어요. 다시 시도해 주세요.");
+    }
+  }, [startTimer]);
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === "inactive") return Promise.resolve(blob);
+    stopTimer();
+    setRecording(false);
+    setPaused(false);
     return new Promise<Blob | null>((resolve) => {
       resolverRef.current = resolve;
       recorder.stop();
     });
-  }, [blob]);
+  }, [blob, stopTimer]);
 
   const discard = useCallback(() => {
     setBlob(null);
     setElapsed(0);
     elapsedRef.current = 0;
+    setRecording(false);
+    setPaused(false);
     setCreatedAt("");
     setError("");
   }, []);
@@ -808,7 +859,7 @@ function useAudioRecorder() {
     clearMedia();
   }, [clearMedia]);
 
-  return { recording, elapsed, blob, createdAt, mimeType, error, start, stop, discard };
+  return { recording, paused, elapsed, blob, createdAt, mimeType, error, start, pause, resume, stop, discard };
 }
 
 function getCategories(questions: BreathQuestion[]) {
