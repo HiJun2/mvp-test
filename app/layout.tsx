@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "숨결 - 시절이야기",
+  title: "숨결 - 기록의 숨결, 지혜를 배달",
   description: "삶과 목소리를 천천히 남기는 시간",
 };
 

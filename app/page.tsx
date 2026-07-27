@@ -107,6 +107,7 @@ type CategoryView = { name: string; key: string; icon: string; color: string };
 const FONT_KEY = "breath.fontSize";
 const CATEGORY_KEY = "breath.selectedCategory";
 const LAST_SCREEN_KEY = "breath.lastStoryScreen";
+const CATEGORY_HINT_KEY = "breath.categoryHintSeen";
 const CATEGORY_ORDER = ["사건", "시간", "사랑", "장소"];
 const CATEGORY_FALLBACKS: Record<string, Omit<CategoryView, "name">> = {
   사건: { key: "event", icon: "calendar-star", color: "#f06a2a" },
@@ -347,7 +348,6 @@ export default function HomePage() {
           categories={categories}
           questions={stage.questions}
           selectedCategory={selectedCategory}
-          typeIndex={stage.typeIndex}
           introImage={breathIntroImage}
           records={records}
           allCompleted={stage.allCompleted}
@@ -375,17 +375,7 @@ export default function HomePage() {
 function SplashScreen() {
   return (
     <main className={styles.splash}>
-      <img src="/images/splash-watercolor.webp" alt="햇살이 비추는 들길" />
-      <div className={styles.splashCopy}>
-        <Leaf aria-hidden="true" />
-        <h1>숨결</h1>
-        <strong>- 시절이야기 -</strong>
-        <p>삶과 목소리를 천천히 남기는 시간</p>
-      </div>
-      <div className={styles.loadingBlock}>
-        <span><i /></span>
-        <p>따뜻한 이야기를 준비하고 있어요...</p>
-      </div>
+      <img src="/images/splash-delivery.png" alt="숨결, 기록의 숨결 지혜를 배달. 따뜻한 이야기를 준비하고 있어요." />
     </main>
   );
 }
@@ -393,7 +383,7 @@ function SplashScreen() {
 function AuthScreen({ onSignup, onLogin }: { onSignup: () => void; onLogin: () => void }) {
   return (
     <main className={styles.authPage}>
-      <div className={styles.authBrand}><Leaf /><span>숨결</span><small>시절이야기</small></div>
+      <div className={styles.authBrand}><Leaf /><span>숨결</span><small>기록의 숨결, 지혜를 배달</small></div>
       <div className={styles.authCopy}><h1>로그인이 되어있지 않아요</h1><p>당신의 이야기를 안전하게 보관하려면 먼저 시작해 주세요.</p></div>
       <div className={styles.authActions}>
         <button className={styles.primaryButton} onClick={onSignup}>간단 회원가입 이후 시작하기</button>
@@ -483,11 +473,21 @@ function DailyStoryScreen({ prompt, existingRecord, onSave, onNavigate }: { prom
 }
 
 function BreathSelectionScreen(props: {
-  categories: CategoryView[]; questions: BreathQuestion[]; selectedCategory: string | null; typeIndex: number | null;
+  categories: CategoryView[]; questions: BreathQuestion[]; selectedCategory: string | null;
   introImage: ContentImage | null; records: VoiceRecord[]; allCompleted: boolean;
   onSelect: (category: string) => void; onReady: () => void; onComplete: () => void; onNavigate: (screen: Screen) => void;
 }) {
   const selected = props.questions.find((question) => question.category === props.selectedCategory) ?? null;
+  const [showCategoryHint, setShowCategoryHint] = useState(false);
+
+  useEffect(() => {
+    if (props.selectedCategory || props.allCompleted || window.localStorage.getItem(CATEGORY_HINT_KEY)) return;
+    setShowCategoryHint(true);
+    window.localStorage.setItem(CATEGORY_HINT_KEY, "1");
+    const timer = window.setTimeout(() => setShowCategoryHint(false), 3800);
+    return () => window.clearTimeout(timer);
+  }, [props.allCompleted, props.selectedCategory]);
+
   return (
     <section className={styles.selectionScreen}>
       <ScreenHeader title="숨결이야기" />
@@ -497,7 +497,7 @@ function BreathSelectionScreen(props: {
           const question = props.questions.find((item) => item.category === category.name);
           const complete = question ? isQuestionCompleted(question, props.records) : true;
           return (
-            <button key={category.name} className={`${styles.categoryButton} ${props.selectedCategory === category.name ? styles.categorySelected : ""}`} style={{ "--category": category.color } as CSSProperties} disabled={complete} onClick={() => props.onSelect(category.name)}>
+            <button key={category.name} className={`${styles.categoryButton} ${props.selectedCategory === category.name ? styles.categorySelected : ""} ${showCategoryHint && !props.selectedCategory && !complete ? styles.categoryHint : ""}`} style={{ "--category": category.color } as CSSProperties} disabled={complete} onClick={() => props.onSelect(category.name)}>
               <CategoryIcon name={category.icon} />
               <span>{category.name}</span>
               {complete && <Check className={styles.categoryCheck} />}
@@ -507,7 +507,7 @@ function BreathSelectionScreen(props: {
       </div>
       <article className={`${styles.selectionCard} ${selected ? styles.questionSelected : ""}`} style={{ backgroundImage: `linear-gradient(to bottom, rgba(255,250,245,.04), rgba(255,250,245,.2)), url(${selected ? questionImageUrl(selected) : props.introImage?.imageUrl ?? "/seed-images/default-paper.png"})` }}>
         <div className={styles.selectionCopy}>
-          <span><Leaf /> {props.typeIndex ? `질문유형 ${props.typeIndex}` : "오늘의 질문"} <Leaf /></span>
+          <span><Leaf /> 오늘의 질문 <Leaf /></span>
           <h1>{selected ? selected.question : "오늘은 어떤 숨결이야기를 하고 싶으신가요?"}</h1>
           <p>{selected ? selected.helperText : "4개의 카테고리 중에서 선택해 주세요."}</p>
         </div>
