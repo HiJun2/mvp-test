@@ -17,11 +17,11 @@
 .app { font-size: 16px; }
 .app,
 .authPage {
-  background-color: #f7f5ef;
+  background-color: #f7f7f4;
   background-image: url("/seed-images/default-paper.png");
   background-position: center top;
   background-repeat: repeat;
-  background-size: 760px auto;
+  background-size: 468px 188px;
 }
 .largeText { font-size: 18px; }
 .xlargeText { font-size: 20px; }
@@ -115,7 +115,7 @@
 .homeScreen { min-height: 100dvh; padding: calc(30px + env(safe-area-inset-top)) 18px 112px; }
 .settingsButton { position: absolute; top: 12px; right: 12px; z-index: 2; border-radius: 50%; background: rgba(255,255,255,.82); }
 
-.homeHero { min-height: 220px; position: relative; display: flex; align-items: center; padding: 28px 76px 28px 24px; overflow: hidden; border: 1px solid #f0e4da; border-radius: 8px; background-color: #fffdf8; background-image: url("/seed-images/default-paper.png"); background-position: center; background-size: cover; box-shadow: 0 12px 28px rgba(95, 69, 48, .08); }
+.homeHero { min-height: 220px; position: relative; display: flex; align-items: center; padding: 28px 76px 28px 24px; overflow: hidden; border: 1px solid #f0e4da; border-radius: 8px; background-color: #f7f7f4; background-image: url("/seed-images/default-paper.png"); background-position: center; background-repeat: repeat; background-size: 468px 188px; box-shadow: 0 12px 28px rgba(95, 69, 48, .08); }
 .homeWelcome { position: relative; z-index: 1; width: 100%; margin: 0; }
 .homeWelcome h1 { margin: 0 0 22px; font-size: 1.9rem; line-height: 1.25; }
 .homeWelcome h1 span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -143,7 +143,7 @@
 .todayCard small { color: #6f6259; font-size: .88rem; line-height: 1.6; }
 .todayCard i { width: 48px; height: 48px; border-radius: 50%; background: var(--action-green); color: #fff; display: grid; place-items: center; }
 
-.homeMessage { margin-top: 20px; border: 1px solid #f0e4da; border-radius: 8px; background-color: #fffdf8; background-image: url("/seed-images/default-paper.png"); background-position: center; background-size: cover; text-align: center; padding: 28px 20px; }
+.homeMessage { margin-top: 20px; border: 1px solid #f0e4da; border-radius: 8px; background-color: #f7f7f4; background-image: url("/seed-images/default-paper.png"); background-position: center; background-repeat: repeat; background-size: 468px 188px; text-align: center; padding: 28px 20px; }
 .homeMessage > span { width: 52px; height: 52px; border-radius: 50%; background: #fff; color: #6f9838; display: grid; place-items: center; margin: 0 auto 20px; }
 .homeMessage strong { display: block; line-height: 1.6; }
 .homeMessage p { margin: 7px 0; color: #71665e; }
