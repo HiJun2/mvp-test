@@ -51,8 +51,18 @@ import styles from "./page.module.css";
 type Screen = "splash" | "auth" | "register" | "home" | "daily" | "breath" | "breathRecord" | "archive" | "settings";
 type RecordType = "daily" | "breath";
 type FontSize = "normal" | "large" | "xlarge";
+type AgeGroup = "10s" | "20s" | "30s" | "40s" | "50s" | "60s" | "70plus";
+type Gender = "female" | "male";
 
-type User = { id: string; name: string; email: string; createdAt: string };
+type User = { id: string; name: string; email: string; ageGroup: AgeGroup; gender: Gender; createdAt: string };
+type ProfileUpdate = {
+  name: string;
+  ageGroup: AgeGroup;
+  gender: Gender;
+  currentPassword: string;
+  newPassword: string;
+  newPasswordConfirm: string;
+};
 type ContentImage = { id: string; description: string; version: number; imageUrl: string };
 type DailyPrompt = { id: string; question: string; helperText: string; isActive: boolean; image: ContentImage | null };
 type BreathQuestion = {
@@ -109,6 +119,15 @@ const FONT_KEY = "breath.fontSize";
 const CATEGORY_KEY = "breath.selectedCategory";
 const LAST_SCREEN_KEY = "breath.lastStoryScreen";
 const CATEGORY_HINT_KEY = "breath.categoryHintSeen";
+const AGE_GROUP_OPTIONS: Array<{ value: AgeGroup; label: string }> = [
+  { value: "10s", label: "10대" },
+  { value: "20s", label: "20대" },
+  { value: "30s", label: "30대" },
+  { value: "40s", label: "40대" },
+  { value: "50s", label: "50대" },
+  { value: "60s", label: "60대" },
+  { value: "70plus", label: "70대 이상" },
+];
 const CATEGORY_ORDER = ["사건", "시간", "사랑", "장소"];
 const CATEGORY_FALLBACKS: Record<string, Omit<CategoryView, "name">> = {
   사건: { key: "event", icon: "calendar-star", color: "#f06a2a" },
@@ -171,6 +190,8 @@ export default function HomePage() {
   const [nameInput, setNameInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
+  const [ageGroupInput, setAgeGroupInput] = useState<AgeGroup | "">("");
+  const [genderInput, setGenderInput] = useState<Gender | "">("");
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -274,13 +295,15 @@ export default function HomePage() {
     const name = nameInput.trim();
     const email = emailInput.trim().toLowerCase();
     if (registerMode === "signup" && !name) return setAuthError("이름을 입력해 주세요.");
+    if (registerMode === "signup" && !ageGroupInput) return setAuthError("나이대를 선택해 주세요.");
+    if (registerMode === "signup" && !genderInput) return setAuthError("성별을 선택해 주세요.");
     if (!email || !passwordInput) return setAuthError("이메일과 비밀번호를 입력해 주세요.");
     setAuthBusy(true);
     setAuthError("");
     try {
       const result = await apiJson<{ user: User }>(
         registerMode === "signup" ? "/api/auth/signup" : "/api/auth/login",
-        { method: "POST", body: JSON.stringify({ name, email, password: passwordInput }) },
+        { method: "POST", body: JSON.stringify({ name, email, password: passwordInput, ageGroup: ageGroupInput, gender: genderInput }) },
       );
       const recordResult = await apiJson<{ records: VoiceRecord[] }>("/api/records");
       setUser(result.user);
@@ -318,6 +341,16 @@ export default function HomePage() {
     setRecords((current) => current.filter((record) => record.id !== recordId));
   }
 
+  async function updateProfile(profile: ProfileUpdate) {
+    const result = await apiJson<{ user: User }>("/api/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(profile),
+    });
+    setUser(result.user);
+    setNameInput(result.user.name);
+    return result.user;
+  }
+
   async function logout() {
     await apiJson("/api/auth/logout", { method: "POST", body: JSON.stringify({}) }).catch(() => null);
     window.localStorage.removeItem(LAST_SCREEN_KEY);
@@ -331,7 +364,7 @@ export default function HomePage() {
   const appClass = [styles.app, styles[`${fontSize}Text`]].filter(Boolean).join(" ");
   if (screen === "splash") return <SplashScreen />;
   if (screen === "auth") return <AuthScreen onSignup={() => { setRegisterMode("signup"); setScreen("register"); }} onLogin={() => { setRegisterMode("login"); setScreen("register"); }} />;
-  if (screen === "register") return <RegisterScreen mode={registerMode} name={nameInput} email={emailInput} password={passwordInput} busy={authBusy} error={authError} onName={setNameInput} onEmail={setEmailInput} onPassword={setPasswordInput} onSubmit={handleAuth} onBack={() => setScreen("auth")} />;
+  if (screen === "register") return <RegisterScreen mode={registerMode} name={nameInput} email={emailInput} password={passwordInput} ageGroup={ageGroupInput} gender={genderInput} busy={authBusy} error={authError} onName={setNameInput} onEmail={setEmailInput} onPassword={setPasswordInput} onAgeGroup={setAgeGroupInput} onGender={setGenderInput} onSubmit={handleAuth} onBack={() => setScreen("auth")} />;
 
   return (
     <main className={appClass}>
@@ -367,7 +400,7 @@ export default function HomePage() {
         />
       )}
       {screen === "archive" && <ArchiveScreen userName={user?.name ?? "사용자"} records={sortedRecords.slice(0, 3)} onDelete={deleteRecord} onNavigate={setScreen} />}
-      {screen === "settings" && <SettingsScreen fontSize={fontSize} onFontSize={setFontSize} onLogout={logout} onBack={() => setScreen("home")} />}
+      {screen === "settings" && user && <SettingsScreen user={user} fontSize={fontSize} onFontSize={setFontSize} onUpdate={updateProfile} onLogout={logout} onBack={() => setScreen("home")} />}
       {screen === "home" && <BottomNavigation current="home" onNavigate={setScreen} />}
     </main>
   );
@@ -395,8 +428,9 @@ function AuthScreen({ onSignup, onLogin }: { onSignup: () => void; onLogin: () =
 }
 
 function RegisterScreen(props: {
-  mode: "signup" | "login"; name: string; email: string; password: string; busy: boolean; error: string;
+  mode: "signup" | "login"; name: string; email: string; password: string; ageGroup: AgeGroup | ""; gender: Gender | ""; busy: boolean; error: string;
   onName: (value: string) => void; onEmail: (value: string) => void; onPassword: (value: string) => void;
+  onAgeGroup: (value: AgeGroup | "") => void; onGender: (value: Gender | "") => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void; onBack: () => void;
 }) {
   return (
@@ -405,6 +439,10 @@ function RegisterScreen(props: {
       <form className={styles.registerForm} onSubmit={props.onSubmit}>
         <div><h1>{props.mode === "signup" ? "이름을 알려주세요" : "다시 만나 반가워요"}</h1><p>{props.mode === "signup" ? "다음부터는 이 이름으로 반갑게 맞이할게요." : "가입한 이메일과 비밀번호로 이어서 기록해요."}</p></div>
         {props.mode === "signup" && <label>사용자 이름<input value={props.name} onChange={(event) => props.onName(event.target.value)} autoComplete="name" placeholder="홍길동" /></label>}
+        {props.mode === "signup" && <div className={styles.registerProfileRow}>
+          <label>나이대<select value={props.ageGroup} onChange={(event) => props.onAgeGroup(event.target.value as AgeGroup | "")}><option value="">선택해 주세요</option>{AGE_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label>성별<select value={props.gender} onChange={(event) => props.onGender(event.target.value as Gender | "")}><option value="">선택해 주세요</option><option value="female">여성</option><option value="male">남성</option></select></label>
+        </div>}
         <label>이메일 아이디<input value={props.email} onChange={(event) => props.onEmail(event.target.value)} autoComplete="email" inputMode="email" placeholder="name@example.com" /></label>
         <label>비밀번호<input type="password" value={props.password} onChange={(event) => props.onPassword(event.target.value)} autoComplete={props.mode === "signup" ? "new-password" : "current-password"} placeholder="8자 이상 입력" /></label>
         {props.error && <p className={styles.errorText}>{props.error}</p>}
@@ -423,7 +461,7 @@ function HomeScreen({ userName, todayComplete, onToday, onArchive, onSettings }:
       </div>
       <button className={styles.todayCard} onClick={todayComplete ? onArchive : onToday}>
         <img src="/images/today-notebook.webp" alt="차와 노트가 놓인 탁자" />
-        <span><strong>{todayComplete ? "오늘 이야기 완료" : "오늘 이야기"}</strong><small>{todayComplete ? "이야기창고에서 다시 들어보세요." : "지금의 나와 하루를 기록해 보세요."}</small></span>
+        <span><strong>{todayComplete ? "오늘이야기 완료" : "오늘이야기"}</strong><small>{todayComplete ? "이야기창고에서 다시 들어보세요." : "지금의 나와 하루를 기록해 보세요."}</small></span>
         <i><ArrowRight /></i>
       </button>
       <div className={styles.homeMessage}>
@@ -683,12 +721,78 @@ function ArchiveScreen({ userName, records, onDelete, onNavigate }: { userName: 
   );
 }
 
-function SettingsScreen({ fontSize, onFontSize, onLogout, onBack }: { fontSize: FontSize; onFontSize: (value: FontSize) => void; onLogout: () => void; onBack: () => void }) {
+function SettingsScreen({ user, fontSize, onFontSize, onUpdate, onLogout, onBack }: {
+  user: User;
+  fontSize: FontSize;
+  onFontSize: (value: FontSize) => void;
+  onUpdate: (profile: ProfileUpdate) => Promise<User>;
+  onLogout: () => void;
+  onBack: () => void;
+}) {
+  const [name, setName] = useState(user.name);
+  const [ageGroup, setAgeGroup] = useState<AgeGroup>(user.ageGroup);
+  const [gender, setGender] = useState<Gender>(user.gender);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function submitProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const changesPassword = Boolean(currentPassword || newPassword || newPasswordConfirm);
+    if (name.trim().length < 2) return setError("이름은 2글자 이상 입력해 주세요.");
+    if (changesPassword && (!currentPassword || !newPassword || !newPasswordConfirm)) {
+      return setError("비밀번호를 변경하려면 세 항목을 모두 입력해 주세요.");
+    }
+    if (changesPassword && newPassword.length < 8) return setError("새 비밀번호는 8자 이상이어야 해요.");
+    if (changesPassword && newPassword !== newPasswordConfirm) return setError("새 비밀번호 확인이 일치하지 않아요.");
+
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const updated = await onUpdate({ name: name.trim(), ageGroup, gender, currentPassword, newPassword, newPasswordConfirm });
+      setName(updated.name);
+      setCurrentPassword("");
+      setNewPassword("");
+      setNewPasswordConfirm("");
+      setSuccess(changesPassword ? "회원정보와 비밀번호를 변경했어요." : "회원정보를 변경했어요.");
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "회원정보를 변경하지 못했어요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className={styles.settingsScreen}>
       <ScreenHeader title="설정" onBack={onBack} />
-      <div className={styles.settingsPanel}><span>읽기와 사용</span><h1>글자 크기</h1><div>{(["normal", "large", "xlarge"] as FontSize[]).map((value, index) => <button key={value} className={fontSize === value ? styles.sizeSelected : ""} onClick={() => onFontSize(value)}>{["보통", "크게", "아주 크게"][index]}</button>)}</div></div>
-      <button className={styles.logoutButton} onClick={onLogout}><LogOut />로그아웃</button>
+      <div className={styles.settingsContent}>
+        <form className={styles.profilePanel} onSubmit={submitProfile}>
+          <div className={styles.panelHeading}><span>회원정보</span><h1>내 정보 관리</h1></div>
+          <div className={styles.profileFields}>
+            <label>이름<input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" /></label>
+            <label>이메일 아이디<input value={user.email} readOnly aria-readonly="true" /></label>
+            <div className={styles.profileRow}>
+              <label>나이대<select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value as AgeGroup)}>{AGE_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              <label>성별<select value={gender} onChange={(event) => setGender(event.target.value as Gender)}><option value="female">여성</option><option value="male">남성</option></select></label>
+            </div>
+          </div>
+          <div className={styles.passwordFields}>
+            <div><strong>비밀번호 변경</strong><small>변경하지 않으려면 비워두세요.</small></div>
+            <label>현재 비밀번호<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" /></label>
+            <label>새 비밀번호<input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" placeholder="8자 이상 입력" /></label>
+            <label>새 비밀번호 확인<input type="password" value={newPasswordConfirm} onChange={(event) => setNewPasswordConfirm(event.target.value)} autoComplete="new-password" /></label>
+          </div>
+          {error && <p className={styles.errorText}>{error}</p>}
+          {success && <p className={styles.successText}>{success}</p>}
+          <button className={styles.primaryButton} disabled={busy}>{busy ? "저장 중" : "회원정보 저장하기"}</button>
+        </form>
+        <div className={styles.settingsPanel}><span>읽기와 사용</span><h1>글자 크기</h1><div>{(["normal", "large", "xlarge"] as FontSize[]).map((value, index) => <button key={value} className={fontSize === value ? styles.sizeSelected : ""} onClick={() => onFontSize(value)}>{["보통", "크게", "아주 크게"][index]}</button>)}</div></div>
+        <button className={styles.logoutButton} onClick={onLogout}><LogOut />로그아웃</button>
+      </div>
     </section>
   );
 }

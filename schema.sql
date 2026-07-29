@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   password_salt TEXT NOT NULL,
+  age_group TEXT NOT NULL DEFAULT '40s' CHECK (age_group IN ('10s', '20s', '30s', '40s', '50s', '60s', '70plus')),
+  gender TEXT NOT NULL DEFAULT 'female' CHECK (gender IN ('female', 'male')),
   created_at TEXT NOT NULL
 );
 

@@ -1,6 +1,6 @@
 import { createCookie, getCookie } from "./http";
 import { randomId, sign, verifySignature } from "./crypto";
-import { getDb, type Env, type User } from "./types";
+import { getDb, type D1Database, type Env, type User } from "./types";
 
 export const SESSION_COOKIE = "breath_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -10,6 +10,34 @@ type SessionRow = {
   user_id: string;
   expires_at: string;
 };
+
+export const AGE_GROUPS = ["10s", "20s", "30s", "40s", "50s", "60s", "70plus"] as const;
+export const GENDERS = ["female", "male"] as const;
+
+export function isAgeGroup(value: string): value is User["age_group"] {
+  return AGE_GROUPS.some((item) => item === value);
+}
+
+export function isGender(value: string): value is User["gender"] {
+  return GENDERS.some((item) => item === value);
+}
+
+export async function ensureUserProfileColumns(db: D1Database) {
+  const { results } = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+  const columns = new Set(results.map((column) => column.name));
+  const missingColumns = [
+    ["age_group", "ALTER TABLE users ADD COLUMN age_group TEXT NOT NULL DEFAULT '40s'"],
+    ["gender", "ALTER TABLE users ADD COLUMN gender TEXT NOT NULL DEFAULT 'female'"],
+  ] as const;
+  for (const [name, statement] of missingColumns) {
+    if (columns.has(name)) continue;
+    try {
+      await db.prepare(statement).run();
+    } catch {
+      // A concurrent request may have completed the same migration.
+    }
+  }
+}
 
 export async function createSession(env: Env, userId: string) {
   const db = getDb(env);
@@ -73,8 +101,10 @@ export async function getCurrentUser(request: Request, env: Env) {
     return null;
   }
 
+  await ensureUserProfileColumns(db);
+
   return db.prepare(
-    "SELECT id, name, email, created_at FROM users WHERE id = ?",
+    "SELECT id, name, email, age_group, gender, created_at FROM users WHERE id = ?",
   )
     .bind(session.user_id)
     .first<User>();

@@ -1,4 +1,9 @@
-import { createSession } from "../../_shared/auth";
+import {
+  createSession,
+  ensureUserProfileColumns,
+  isAgeGroup,
+  isGender,
+} from "../../_shared/auth";
 import { hashPassword, randomId } from "../../_shared/crypto";
 import { errorResponse, isEmail, jsonResponse, readJson } from "../../_shared/http";
 import { getDb, type PagesContext } from "../../_shared/types";
@@ -7,6 +12,8 @@ type SignupBody = {
   name?: string;
   email?: string;
   password?: string;
+  ageGroup?: string;
+  gender?: string;
 };
 
 type ExistingUser = {
@@ -18,11 +25,14 @@ export async function onRequestPost({ request, env }: PagesContext) {
   if (!db) {
     return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
   }
+  await ensureUserProfileColumns(db);
 
   const body = await readJson<SignupBody>(request);
   const name = body?.name?.trim() ?? "";
   const email = body?.email?.trim().toLowerCase() ?? "";
   const password = body?.password ?? "";
+  const ageGroup = body?.ageGroup?.trim() ?? "";
+  const gender = body?.gender?.trim() ?? "";
 
   if (name.length < 2) {
     return errorResponse("이름을 2글자 이상 입력해 주세요.");
@@ -32,6 +42,12 @@ export async function onRequestPost({ request, env }: PagesContext) {
   }
   if (password.length < 8) {
     return errorResponse("비밀번호는 8자 이상이어야 해요.");
+  }
+  if (!isAgeGroup(ageGroup)) {
+    return errorResponse("나이대를 선택해 주세요.");
+  }
+  if (!isGender(gender)) {
+    return errorResponse("성별을 선택해 주세요.");
   }
 
   let stage = "checking-existing-user";
@@ -52,9 +68,9 @@ export async function onRequestPost({ request, env }: PagesContext) {
 
     stage = "creating-user";
     await db.prepare(
-      "INSERT INTO users (id, name, email, password_hash, password_salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO users (id, name, email, password_hash, password_salt, age_group, gender, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
-      .bind(userId, name, email, hash, salt, createdAt)
+      .bind(userId, name, email, hash, salt, ageGroup, gender, createdAt)
       .run();
 
     stage = "creating-session";
@@ -66,6 +82,8 @@ export async function onRequestPost({ request, env }: PagesContext) {
           id: userId,
           name,
           email,
+          ageGroup,
+          gender,
           createdAt,
         },
       },

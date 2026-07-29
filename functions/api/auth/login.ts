@@ -1,7 +1,8 @@
-import { createSession } from "../../_shared/auth";
+import { createSession, ensureUserProfileColumns } from "../../_shared/auth";
 import { verifyPassword } from "../../_shared/crypto";
 import { errorResponse, isEmail, jsonResponse, readJson } from "../../_shared/http";
 import { getDb, type PagesContext } from "../../_shared/types";
+import type { AgeGroup, Gender } from "../../_shared/types";
 
 type LoginBody = {
   email?: string;
@@ -12,6 +13,8 @@ type UserWithPassword = {
   id: string;
   name: string;
   email: string;
+  age_group: AgeGroup;
+  gender: Gender;
   password_hash: string;
   password_salt: string;
   created_at: string;
@@ -22,6 +25,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
   if (!db) {
     return errorResponse("D1 데이터베이스 연결이 필요해요.", 500);
   }
+  await ensureUserProfileColumns(db);
 
   const body = await readJson<LoginBody>(request);
   const email = body?.email?.trim().toLowerCase() ?? "";
@@ -32,7 +36,7 @@ export async function onRequestPost({ request, env }: PagesContext) {
   }
 
   const user = await db.prepare(
-    "SELECT id, name, email, password_hash, password_salt, created_at FROM users WHERE email = ?",
+    "SELECT id, name, email, age_group, gender, password_hash, password_salt, created_at FROM users WHERE email = ?",
   )
     .bind(email)
     .first<UserWithPassword>();
@@ -59,6 +63,8 @@ export async function onRequestPost({ request, env }: PagesContext) {
         id: user.id,
         name: user.name,
         email: user.email,
+        ageGroup: user.age_group,
+        gender: user.gender,
         createdAt: user.created_at,
       },
     },

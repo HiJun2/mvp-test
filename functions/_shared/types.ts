@@ -14,8 +14,13 @@ export type User = {
   id: string;
   name: string;
   email: string;
+  age_group: AgeGroup;
+  gender: Gender;
   created_at: string;
 };
+
+export type AgeGroup = "10s" | "20s" | "30s" | "40s" | "50s" | "60s" | "70plus";
+export type Gender = "female" | "male";
 
 export type RecordRow = {
   id: string;
