@@ -114,6 +114,7 @@ type PendingRecord = {
   mimeType: string;
 };
 type CategoryView = { name: string; key: string; icon: string; color: string };
+type StageTransition = { completedTitle: string; nextTitle: string };
 
 const FONT_KEY = "breath.fontSize";
 const CATEGORY_KEY = "breath.selectedCategory";
@@ -185,6 +186,7 @@ export default function HomePage() {
   const [dailyPrompt, setDailyPrompt] = useState<DailyPrompt>(FALLBACK_DAILY);
   const [breathIntroImage, setBreathIntroImage] = useState<ContentImage | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [stageTransition, setStageTransition] = useState<StageTransition | null>(null);
   const [fontSize, setFontSize] = useState<FontSize>("normal");
   const [registerMode, setRegisterMode] = useState<"signup" | "login">("signup");
   const [nameInput, setNameInput] = useState("");
@@ -203,8 +205,8 @@ export default function HomePage() {
   const todayRecord = sortedRecords.find(
     (record) => record.type === "daily" && (record.localDate ?? getSeoulDateKey(record.createdAt)) === todayKey,
   );
-  const categories = useMemo(() => getCategories(questions), [questions]);
   const stage = useMemo(() => getQuestionStage(questions, records), [questions, records]);
+  const categories = useMemo(() => getCategories(stage.questions), [stage.questions]);
   const selectedQuestion = useMemo(
     () => stage.questions.find((question) => question.category === selectedCategory) ?? null,
     [selectedCategory, stage.questions],
@@ -351,6 +353,26 @@ export default function HomePage() {
     return result.user;
   }
 
+  function handleBreathNext(savedRecord?: VoiceRecord) {
+    if (savedRecord) {
+      const beforeStage = getQuestionStage(questions, records);
+      const recordsAfterSave = [savedRecord, ...records.filter((record) => record.id !== savedRecord.id)];
+      const afterStage = getQuestionStage(questions, recordsAfterSave);
+      if (
+        beforeStage.typeIndex !== null &&
+        afterStage.typeIndex !== null &&
+        beforeStage.typeIndex !== afterStage.typeIndex
+      ) {
+        setStageTransition({
+          completedTitle: beforeStage.questions[0]?.typeTitle ?? "현재 질문유형",
+          nextTitle: afterStage.questions[0]?.typeTitle ?? "다음 질문유형",
+        });
+      }
+    }
+    setSelectedCategory(null);
+    setScreen("breath");
+  }
+
   async function logout() {
     await apiJson("/api/auth/logout", { method: "POST", body: JSON.stringify({}) }).catch(() => null);
     window.localStorage.removeItem(LAST_SCREEN_KEY);
@@ -385,9 +407,12 @@ export default function HomePage() {
           introImage={breathIntroImage}
           records={records}
           allCompleted={stage.allCompleted}
+          stageTransition={stageTransition}
           onSelect={setSelectedCategory}
           onReady={() => selectedQuestion && setScreen("breathRecord")}
           onComplete={() => { setSelectedCategory(null); setScreen("home"); }}
+          onContinueStage={() => setStageTransition(null)}
+          onEndStage={() => { setStageTransition(null); setSelectedCategory(null); setScreen("home"); }}
           onNavigate={setScreen}
         />
       )}
@@ -395,7 +420,7 @@ export default function HomePage() {
         <BreathRecorderScreen
           question={selectedQuestion}
           onSave={saveRecord}
-          onNext={() => { setSelectedCategory(null); setScreen("breath"); }}
+          onNext={handleBreathNext}
           onNavigate={setScreen}
         />
       )}
@@ -513,8 +538,9 @@ function DailyStoryScreen({ prompt, existingRecord, onSave, onNavigate }: { prom
 
 function BreathSelectionScreen(props: {
   categories: CategoryView[]; questions: BreathQuestion[]; selectedCategory: string | null;
-  introImage: ContentImage | null; records: VoiceRecord[]; allCompleted: boolean;
-  onSelect: (category: string) => void; onReady: () => void; onComplete: () => void; onNavigate: (screen: Screen) => void;
+  introImage: ContentImage | null; records: VoiceRecord[]; allCompleted: boolean; stageTransition: StageTransition | null;
+  onSelect: (category: string) => void; onReady: () => void; onComplete: () => void;
+  onContinueStage: () => void; onEndStage: () => void; onNavigate: (screen: Screen) => void;
 }) {
   const selected = props.questions.find((question) => question.category === props.selectedCategory) ?? null;
   const [showCategoryHint, setShowCategoryHint] = useState(false);
@@ -547,17 +573,18 @@ function BreathSelectionScreen(props: {
       <article className={`${styles.selectionCard} ${selected ? styles.questionSelected : ""}`} style={{ backgroundImage: `linear-gradient(to bottom, rgba(255,250,245,.04), rgba(255,250,245,.2)), url(${selected ? questionImageUrl(selected) : props.introImage?.imageUrl ?? "/seed-images/default-paper.png"})` }}>
         <div className={styles.selectionCopy}>
           <h1>{selected ? selected.question : "오늘은 어떤 숨결이야기를 하고 싶으신가요?"}</h1>
-          <p>{selected ? selected.helperText : "4개의 카테고리 중에서 선택해 주세요."}</p>
+          <p>{selected ? selected.helperText : `활성화된 ${props.categories.length}개 카테고리 중에서 선택해 주세요.`}</p>
         </div>
         {selected && <button className={styles.cardAction} onClick={props.onReady}><Leaf />이 질문으로 할게요<ChevronRight /></button>}
       </article>
       <BottomNavigation current="breath" onNavigate={props.onNavigate} />
+      {props.stageTransition && !props.allCompleted && <ConfirmModal title="질문유형을 모두 완료했어요" description={`“${props.stageTransition.completedTitle}”의 이야기를 모두 들려주셨어요. 다음 질문유형인 “${props.stageTransition.nextTitle}”으로 이어갈까요?`} actions={<><button className={styles.primaryButton} onClick={props.onContinueStage}>다음 질문유형으로 넘어가기</button><button className={styles.outlineButton} onClick={props.onEndStage}>오늘은 종료하기</button></>} />}
       {props.allCompleted && <ConfirmModal title="모든 이야기를 들려주셨어요" description="당신이 들려준 목소리를 소중히 간직할게요." actions={<button className={styles.primaryButton} onClick={props.onComplete}>완료</button>} />}
     </section>
   );
 }
 
-function BreathRecorderScreen({ question, onSave, onNext, onNavigate }: { question: BreathQuestion; onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNext: () => void; onNavigate: (screen: Screen) => void }) {
+function BreathRecorderScreen({ question, onSave, onNext, onNavigate }: { question: BreathQuestion; onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNext: (savedRecord?: VoiceRecord) => void; onNavigate: (screen: Screen) => void }) {
   return (
     <RecorderExperience
       variant="breath"
@@ -579,7 +606,7 @@ function RecorderExperience(props: {
   variant: "daily" | "breath"; title: string; eyebrow?: string; question: string; helper: string; imageUrl: string; imageAlt: string;
   recordMeta: Omit<PendingRecord, "createdAt" | "durationSeconds" | "audioBlob" | "mimeType">;
   onSave: (record: PendingRecord) => Promise<VoiceRecord>; onNavigate: (screen: Screen) => void;
-  onNext?: () => void; primaryAction: "saveDaily" | "nextQuestion";
+  onNext?: (savedRecord?: VoiceRecord) => void; primaryAction: "saveDaily" | "nextQuestion";
 }) {
   const recorder = useAudioRecorder();
   const [pendingMove, setPendingMove] = useState<{ target: Screen | "next"; saveLabel: string; discardLabel: string } | null>(null);
@@ -596,12 +623,12 @@ function RecorderExperience(props: {
     mimeType: blob.type || recorder.mimeType || "audio/webm",
   }), [props.recordMeta, recorder.createdAt, recorder.elapsed, recorder.mimeType]);
 
-  const moveNow = useCallback((target: Screen | "next") => {
+  const moveNow = useCallback((target: Screen | "next", savedRecord?: VoiceRecord) => {
     recorder.discard();
     setPendingMove(null);
     setPendingBlob(null);
     setSaveError("");
-    if (target === "next") props.onNext?.();
+    if (target === "next") props.onNext?.(savedRecord);
     else props.onNavigate(target);
   }, [props, recorder]);
 
@@ -618,8 +645,8 @@ function RecorderExperience(props: {
     setSaving(true);
     setSaveError("");
     try {
-      await props.onSave(buildRecord(pendingBlob));
-      moveNow(pendingMove.target);
+      const savedRecord = await props.onSave(buildRecord(pendingBlob));
+      moveNow(pendingMove.target, savedRecord);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "녹음을 저장하지 못했어요.");
     } finally {
